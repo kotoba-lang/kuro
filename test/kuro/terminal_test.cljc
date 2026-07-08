@@ -23,7 +23,7 @@
 
 (deftest host-terminal-requires-signed-opt-in
   (testing "unsigned host mode is rejected"
-    (is (thrown? clojure.lang.ExceptionInfo
+    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
                  (t/session "host" "cid:repo" :terminal-host))))
   (testing "signed host mode is allowed"
     (is (= :terminal-host
