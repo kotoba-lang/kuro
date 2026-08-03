@@ -89,9 +89,21 @@
 
   This function does not run a command and does not compute cryptographic hashes.
   The host may include digest fields such as :stdout-cid, :stderr-cid, or
-  :patch-cids in result."
+  :patch-cids in result.
+
+  Result keys outside the selected set are dropped on purpose: a receipt is a
+  fixed shape, so one host cannot smuggle fields another host will not produce.
+  The bounded-execution keys (:timed-out? :truncated? :duration-ms :error) are
+  part of that shape because a receipt that records exit 124 without saying
+  \"the deadline killed it\" reads as a command that chose to fail.
+
+  Host-supplied keys are namespaced into :kuro/* on the way in, so the whole
+  receipt is one namespace. It used to carry :kuro/mode next to a bare :stdout;
+  receipt-fact puts this map inside a kotoba fact, where an unnamespaced :stdout
+  is a name every other producer can also claim."
   [sess cmd result]
-  (let [exit-code (:exit-code result)]
+  (let [exit-code (:exit-code result)
+        kuro-ns (fn [m] (into {} (map (fn [[k v]] [(keyword "kuro" (name k)) v])) m))]
     (when-not (integer? exit-code)
       (throw (ex-info "receipt result requires integer :exit-code" {:result result})))
     (merge {:kuro/type :kuro/receipt
@@ -102,7 +114,11 @@
             :kuro/argv (:kuro/argv cmd)
             :kuro/effective-capabilities (effective-capabilities sess)
             :kuro/exit-code exit-code}
-           (select-keys result [:stdout :stderr :stdout-cid :stderr-cid :patch-cids :started-at :finished-at]))))
+           (kuro-ns
+            (select-keys result [:stdout :stderr :stdout-cid :stderr-cid :patch-cids
+                                 :stdout-bytes :stderr-bytes
+                                 :started-at :finished-at :duration-ms
+                                 :timed-out? :truncated? :error])))))
 
 (defn receipt-fact [receipt]
   {:kotoba/type :kuro/terminal-receipt
