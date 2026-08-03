@@ -153,8 +153,16 @@ equivalent), which is a dependency decision this repo has not taken.
 
 ```sh
 clojure -M:test                     # portable model + ansi + stream (JVM)
-npm install && npm run test:host    # both Node host providers (nbb)
+npm install
+npm run test:parity                 # the SAME .cljc suites under ClojureScript
+npm run test:host                   # both Node host providers (nbb)
 ```
 
-Both run in CI. The first proves the model stays portable; the second proves a
-receipt describes a command that really ran.
+All three run in CI.
+
+`test:parity` exists because "portable `.cljc`" was a claim nobody checked. For
+one day `kuro.ansi` was green on the JVM and **silently produced no output at
+all under ClojureScript** — `(int c)` is `NaN` there, so the CSI scanner never
+found a final byte and discarded everything. The consumer that broke was
+`kobo`'s server, which runs on nbb. A `.cljc` namespace tested on one runtime
+can be entirely dead on the other.

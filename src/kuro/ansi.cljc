@@ -97,6 +97,16 @@
 
 (def ^:private esc \u001b)
 
+(defn- code
+  "文字のコードポイント。**`int` は使えない** —— ClojureScript では文字は
+   1 文字の文字列で、`(int \"m\")` は NaN になる。NaN との比較はすべて false
+   なので、`scan-csi` は終端バイトを永遠に見つけられず『切れた CSI』として
+   **全部捨てていた**。JVM のテストは緑のまま、cljs では出力が丸ごと消える
+   —— まさにサーバが走る側だけが壊れていた（実測 2026-08-03）。"
+  [c]
+  #?(:clj (int c)
+     :cljs (.charCodeAt (str c) 0)))
+
 (defn- parse-params
   "ECMA-48: 省略されたパラメータは 0。したがって `CSI m` は `CSI 0 m`（reset）で
    あって「何もしない」ではない。空を [] にすると色が消えずに残り続ける。"
@@ -114,7 +124,7 @@
       (if (>= j n)
         nil                            ; 途中で切れている — 呼び出し側が捨てる
         (let [c (nth s j)]
-          (if (<= 0x40 (int c) 0x7e)
+          (if (<= 0x40 (code c) 0x7e)
             [c (subs s i j) (inc j)]
             (recur (inc j))))))))
 
@@ -190,7 +200,7 @@
                   ;; ncurses が普通に出す）の `B` が本文に混ざる —— 実測で出た。
                   :else
                   (let [end (loop [j (inc i)]
-                              (if (and (< j n) (<= 0x20 (int (nth s j)) 0x2f))
+                              (if (and (< j n) (<= 0x20 (code (nth s j)) 0x2f))
                                 (recur (inc j))
                                 (min n (inc j))))]
                     (recur end style buf out))))
