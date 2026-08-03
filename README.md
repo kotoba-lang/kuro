@@ -122,7 +122,7 @@ enforced across **both** streams together by `kuro.stream`, which also records
 how many bytes it dropped: a silently-cut receipt is indistinguishable from a
 short success.
 
-## Reading real output — `kuro.ansi`
+## Reading real output — ANSI escape sequences (`kuro.ansi`)
 
 Command output is not plain text. `kuro.ansi` turns it into styled lines.
 
