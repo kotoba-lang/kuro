@@ -116,7 +116,7 @@
             :kuro/exit-code exit-code}
            (kuro-ns
             (select-keys result [:stdout :stderr :stdout-cid :stderr-cid :patch-cids
-                                 :stdout-bytes :stderr-bytes
+                                 :stdout-bytes :stderr-bytes :dropped-bytes
                                  :started-at :finished-at :duration-ms
                                  :timed-out? :truncated? :error])))))
 
