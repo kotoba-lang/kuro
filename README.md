@@ -16,6 +16,9 @@ sessions auditable.
 kuro = terminal session + command intent + effective grant + receipt
 ```
 
+**Status: R2** — the model is stable and a real backing runs commands with
+streaming output, stdin and cancellation. Not a PTY (see *Not a PTY* below).
+
 ## Model
 
 Terminal modes are explicit:
@@ -52,8 +55,7 @@ widen the shape another host will not produce.
 
 ## Running commands for real — `kuro.host.node`
 
-`kuro.host.node` is the Node (nbb) host provider: the only place a command
-actually runs. It is ClojureScript, not `.cljc`, because the effect belongs to
+`kuro.host.node` is the Node (nbb) host provider for one-shot commands. It is ClojureScript, not `.cljc`, because the effect belongs to
 the host and the model stays portable without it.
 
 ```clojure
@@ -92,17 +94,66 @@ One measured caveat: on macOS, CoreFoundation injects
 `__CF_USER_TEXT_ENCODING` into every child below the spawn API. The manifest is
 everything this provider passes, not literally everything the child sees.
 
+## Streaming, stdin, cancellation — `kuro.host.stream-node`
+
+`run` is synchronous: it returns only when the command is over, which makes a
+ten-minute build and an infinite loop look identical to the caller. The
+streaming provider fixes that.
+
+```clojure
+(require '[kuro.host.stream-node :as sh])
+
+(def h (sh/start session (t/command ["npm" "test"])
+                 {:repo-root "."
+                  :on-chunk (fn [st chunk] (print (:text chunk)))
+                  :on-exit  (fn [receipt] ...)}))
+
+((:write h) "y\n")      ; stdin
+((:close-stdin h))
+((:kill h))              ; SIGTERM
+@(:stream h)             ; the live kuro.stream value, readable at any moment
+```
+
+`sh/run-async` wraps it in a Promise resolving to the receipt.
+
+The same guarantees apply — capability check before spawn, argv with no shell,
+cwd confinement, declared environment, deadline, output cap. The cap is
+enforced across **both** streams together by `kuro.stream`, which also records
+how many bytes it dropped: a silently-cut receipt is indistinguishable from a
+short success.
+
+## Reading real output — `kuro.ansi`
+
+Command output is not plain text. `kuro.ansi` turns it into styled lines.
+
+```clojure
+(ansi/lines "\u001b[32mok\u001b[0m\nnext")
+;; => [[{:text "ok" :style {:fg "green"}}] [{:text "next" :style {}}]]
+```
+
+Handled: SGR (bold/dim/italic/underline/inverse/strike, 8 + bright + 256 +
+truecolor, resets), `\r` in-line overwrite, `\b`, tab expansion, and `CSI K`
+erase — which is what actually collapses a progress bar (a bare `\r` leaves
+the tail, on a real tty too). Everything else — cursor addressing, scroll
+regions, alternate screen — is **discarded**, never printed.
+
 ### Not a PTY
 
-There is no pseudo-terminal, no ANSI/VT escape handling, no line editing, and
-no input loop. `run` is one command in, one receipt out. Interactive editing
-and streaming output are unbuilt.
+The child is connected to **pipes**, not a pseudo-terminal. `isatty` is false,
+so many programs disable colour and switch to line buffering; full-screen
+programs (`vim`, `top`) do not work; there is no terminal size and no
+SIGWINCH. The declared environment sets `TERM=dumb` rather than lying about
+it.
+
+`kuro.ansi` is a line-oriented reader, not a screen emulator — it has no
+cursor grid and no scrollback. A real PTY needs a native addon (node-pty or
+equivalent), which is a dependency decision this repo has not taken.
 
 ## Tests
 
 ```sh
-clojure -M:test                                    # portable model (JVM)
-npm install && npm run test:host                   # Node host provider (nbb)
+clojure -M:test                     # portable model + ansi + stream (JVM)
+npm install && npm run test:host    # both Node host providers (nbb)
 ```
 
 Both run in CI. The first proves the model stays portable; the second proves a
