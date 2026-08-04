@@ -134,6 +134,36 @@ enforced across **both** streams together by `kuro.stream`, which also records
 how many bytes it dropped: a silently-cut receipt is indistinguishable from a
 short success.
 
+## Surviving the host — `kuro.checkpoint`
+
+A `kuro.stream` value lives only in memory: if the host dies, both *what was
+running* and *how far it got* die with it. `kobo.agent`'s durable loop cannot
+sit on that.
+
+```clojure
+(require '[kuro.checkpoint :as cp])
+
+(cp/->edn @(:stream h))                  ; a plain EDN value — write it anywhere
+(cp/restore saved)                       ; back, as a stream
+```
+
+Pure `.cljc`: this namespace converts, it does not persist. **Writing is the
+host's job**, so the choice of file / kotobase / DataLad does not reach here.
+
+Two things it refuses to pretend:
+
+- **A restored run is never `:running`.** Its process did not survive the
+  host, so it comes back `:orphaned` (with `:kuro/restored-from` keeping what
+  it was). Returning `:running` would invite the caller to send stdin to a
+  corpse.
+- **`cp/abandon` closes an orphan into a receipt** — exit 129 and a stated
+  reason by default, or whatever the host actually knows. A run that cannot be
+  closed leaves an open hole in the ledger.
+
+`:max-chunk-bytes` truncates the saved body and records
+`:kuro.checkpoint/dropped-bytes`; the byte counters keep the pre-truncation
+truth. Off by default — capping is the storage's business, not this layer's.
+
 ## Reading real output — ANSI escape sequences (`kuro.ansi`)
 
 Command output is not plain text. `kuro.ansi` turns it into styled lines.
