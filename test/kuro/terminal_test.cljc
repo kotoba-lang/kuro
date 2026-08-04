@@ -3,10 +3,10 @@
             [kuro.terminal :as t]))
 
 (deftest builds-safe-session-and-receipt
-  (let [sess (t/session "s1" "cid:repo" :terminal-safe)
+  (let [sess (t/session "s1" "cid:repo" :terminal-repo)
         cmd (t/command ["clojure" "-M:test"])
         rcpt (t/receipt sess cmd {:exit-code 0 :stdout "ok\n" :stderr ""})]
-    (is (= :terminal-safe (:kuro/mode sess)))
+    (is (= :terminal-repo (:kuro/mode sess)))
     (is (t/command-allowed? sess ["repo/read"]))
     (is (= ["clojure" "-M:test"] (:kuro/argv rcpt)))
     (is (= 0 (:kuro/exit-code rcpt)))
@@ -14,7 +14,7 @@
 
 (deftest receipt-is-one-namespace
   (testing "host-supplied result keys land in :kuro/*, not bare"
-    (let [rcpt (t/receipt (t/session "s1" "cid:repo" :terminal-safe)
+    (let [rcpt (t/receipt (t/session "s1" "cid:repo" :terminal-repo)
                           (t/command ["true"])
                           {:exit-code 0 :stdout "ok" :stdout-cid "bafkrei…"
                            :duration-ms 12 :timed-out? false})]
@@ -27,7 +27,7 @@
 
 (deftest receipt-drops-undeclared-result-keys
   (testing "a host cannot widen the receipt shape by adding keys"
-    (let [rcpt (t/receipt (t/session "s1" "cid:repo" :terminal-safe)
+    (let [rcpt (t/receipt (t/session "s1" "cid:repo" :terminal-repo)
                           (t/command ["true"])
                           {:exit-code 0 :secret-token "leak" :pid 4242})]
       (is (nil? (:kuro/secret-token rcpt)))
@@ -35,12 +35,12 @@
 
 (deftest receipt-requires-integer-exit-code
   (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
-               (t/receipt (t/session "s1" "cid:repo" :terminal-safe)
+               (t/receipt (t/session "s1" "cid:repo" :terminal-repo)
                           (t/command ["true"])
                           {:exit-code nil}))))
 
 (deftest denies-missing-capabilities
-  (let [sess (t/session "s1" "cid:repo" :terminal-safe)]
+  (let [sess (t/session "s1" "cid:repo" :terminal-repo)]
     (is (not (t/command-allowed? sess ["secrets/get"])))
     (is (= {:kuro/allowed? false
             :kuro/reason :missing-capabilities
@@ -56,3 +56,22 @@
     (is (= :terminal-host
            (:kuro/mode (t/session "host" "cid:repo" :terminal-host
                                   {:kuro/signed-opt-in? true}))))))
+
+(deftest every-receipt-states-what-enforced-it
+  (testing "no isolation is a recorded fact, not an omission"
+    ;; 隔離の有無を書かない receipt は、隔離されていたかのように読まれる。
+    ;; この repo の backing は fs も network も confine しないので、
+    ;; そう書いてある receipt が出る。
+    (let [r (t/receipt (t/session "s1" "cid:repo" :terminal-repo)
+                       (t/command ["true"]) {:exit-code 0})]
+      (is (= :none (:kuro/isolation r)))))
+  (testing "a host that really confines says so, and it survives into the receipt"
+    (let [r (t/receipt (t/session "s1" "cid:repo" :terminal-repo)
+                       (t/command ["true"]) {:exit-code 0 :isolation :microvm})]
+      (is (= :microvm (:kuro/isolation r))))))
+
+(deftest mode-name-does-not-claim-safety
+  (testing "the default mode is named for its grant scope, not for isolation"
+    (is (contains? t/terminal-modes :terminal-repo))
+    (is (not (contains? t/terminal-modes :terminal-safe)))
+    (is (= "repo" (:kuro/label (t/terminal-modes :terminal-repo))))))

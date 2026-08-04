@@ -25,8 +25,8 @@ Terminal modes are explicit:
 
 | mode | purpose |
 |---|---|
-| `:terminal-safe` | default sandbox: repo read, tmp write, no secrets |
-| `:terminal-build` | build sandbox: repo read/write, cache, bounded net |
+| `:terminal-repo` | default grant: repo read, tmp write, no secrets |
+| `:terminal-build` | build grant: repo read/write, cache, bounded net |
 | `:terminal-agent` | durable agent tick terminal |
 | `:terminal-host` | signed opt-in escape hatch |
 
@@ -44,7 +44,7 @@ widen the shape another host will not produce.
 (require '[kuro.terminal :as t])
 
 (def session
-  (t/session "s1" "repo-cid" :terminal-safe
+  (t/session "s1" "repo-cid" :terminal-repo
              {:kuro/cwd "."
               :kuro/grant {:capabilities #{"repo/read" "tmp/write"}}}))
 
@@ -77,6 +77,18 @@ the host and the model stays portable without it.
 | bounded time | `:timeout-ms`, default 120 s ⇒ exit 124, `:kuro/timed-out?` |
 | bounded output | `:max-output-bytes`, default 1 MiB ⇒ exit 125, `:kuro/truncated?` |
 | content-addressed output | stdout/stderr as CIDv1-raw/sha2-256 (`bafkrei…`) |
+
+### The mode is a grant scope, not an isolation level
+
+The default mode is `:terminal-repo`, not `terminal-safe`. It was renamed on
+2026-08-04 because nothing here confines the filesystem or the network, and
+"safe" was the one word in the vocabulary claiming otherwise — read by an
+operator deciding what to run.
+
+Every receipt carries `:kuro/isolation`, defaulting to `:none`. A host that
+really confines (container, microVM, aiueos surface provider) puts its own
+value there. **A receipt that omits it would be read as though it had been
+isolated**, so it is never omitted.
 
 ### What it does not enforce
 

@@ -9,7 +9,7 @@
 
 (def node (.-execPath js/process))
 
-(defn- safe [] (t/session "s1" "repo-cid" :terminal-safe))
+(defn- safe [] (t/session "s1" "repo-cid" :terminal-repo))
 (defn- emit [src] (t/command [node "-e" src]))
 
 (deftest streams-output-before-the-process-exits
@@ -70,7 +70,7 @@
                           (done))})))
 
 (deftest denial-happens-before-spawn
-  (let [out (sh/start (t/session "s1" "repo-cid" :terminal-safe
+  (let [out (sh/start (t/session "s1" "repo-cid" :terminal-repo
                                  {:kuro/grant {:capabilities #{}}})
                       (emit "process.stdout.write('SHOULD-NOT-RUN')")
                       {:repo-root "."})]
