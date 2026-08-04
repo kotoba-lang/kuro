@@ -1,10 +1,22 @@
 (ns kuro.terminal
   (:require [clojure.string :as str]))
 
+(def isolation-none
+  "この repo が提供する隔離の実態。
+
+   `:none` は「隔離が無い」という**記録された事実**であって既定値ではない。
+   receipt にこれが載るのは、後から audit する人が『どの backing で走ったのか』
+   を receipt だけで判定できるようにするため —— 隔離の有無を書かない receipt は、
+   隔離されていたかのように読まれる。
+
+   実際に confine する backing（container / microVM / aiueos surface provider）が
+   接続されたら、その host が自分の値を入れる。"
+  :none)
+
 (def terminal-modes
-  {:terminal-safe
-   {:kuro/mode :terminal-safe
-    :kuro/label "safe"
+  {:terminal-repo
+   {:kuro/mode :terminal-repo
+    :kuro/label "repo"
     :kuro/default-capabilities #{"repo/read" "tmp/write" "log/write"}
     :kuro/host? false}
 
@@ -107,6 +119,10 @@
     (when-not (integer? exit-code)
       (throw (ex-info "receipt result requires integer :exit-code" {:result result})))
     (merge {:kuro/type :kuro/receipt
+            ;; 何が実際に enforce したか。host が :isolation を渡さなければ
+            ;; :none —— 黙って省略させない（省略された receipt は、隔離されて
+            ;; いたかのように読まれる）。
+            :kuro/isolation (:isolation result isolation-none)
             :kuro/session-id (:kuro/session-id sess)
             :kuro/repo-root-cid (:kuro/repo-root-cid sess)
             :kuro/mode (:kuro/mode sess)
@@ -116,7 +132,7 @@
             :kuro/exit-code exit-code}
            (kuro-ns
             (select-keys result [:stdout :stderr :stdout-cid :stderr-cid :patch-cids
-                                 :stdout-bytes :stderr-bytes :dropped-bytes
+                                 :stdout-bytes :stderr-bytes :dropped-bytes :isolation
                                  :started-at :finished-at :duration-ms
                                  :timed-out? :truncated? :error])))))
 

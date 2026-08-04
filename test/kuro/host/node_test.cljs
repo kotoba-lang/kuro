@@ -17,7 +17,7 @@
 
 (defn- safe-session
   ([] (safe-session {}))
-  ([attrs] (t/session "test" "repo-cid" :terminal-safe attrs)))
+  ([attrs] (t/session "test" "repo-cid" :terminal-repo attrs)))
 
 (defn- emit [js-src] (t/command [node "-e" js-src]))
 
@@ -99,7 +99,7 @@
     (is (= 0 (:kuro/exit-code r)))
     (is (= "ok" (:kuro/stdout r)))
     (is (= :kuro/receipt (:kuro/type r)))
-    (is (= :terminal-safe (:kuro/mode r)))
+    (is (= :terminal-repo (:kuro/mode r)))
     (is (= #{"repo/read" "tmp/write" "log/write"} (:kuro/effective-capabilities r)))
     (testing "output is content-addressed, not just carried"
       (is (= (cid/text-cid "ok") (:kuro/stdout-cid r)))

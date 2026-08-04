@@ -1,5 +1,5 @@
 (ns kuro.host.node
-  "Node host provider for `:terminal-safe` / `:terminal-build` / `:terminal-agent`
+  "Node host provider for `:terminal-repo` / `:terminal-build` / `:terminal-agent`
   sessions. This is the layer `kuro.terminal`'s docstrings keep pointing at:
   the model decides *whether* a command may run and *what the receipt says*;
   this namespace is the only place that actually runs one.

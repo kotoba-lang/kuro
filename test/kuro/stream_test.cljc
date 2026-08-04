@@ -3,7 +3,7 @@
             [kuro.stream :as stream]
             [kuro.terminal :as t]))
 
-(defn- sess [] (t/session "s1" "cid:repo" :terminal-safe))
+(defn- sess [] (t/session "s1" "cid:repo" :terminal-repo))
 (defn- cmd [] (t/command ["echo" "hi"]))
 
 (deftest chunks-are-ordered-by-acceptance-not-time
