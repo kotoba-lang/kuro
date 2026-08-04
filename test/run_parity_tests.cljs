@@ -15,6 +15,7 @@
 (ns run-parity-tests
   (:require [cljs.test :as test]
             [kuro.ansi-test]
+            [kuro.checkpoint-test]
             [kuro.stream-test]
             [kuro.terminal-test]))
 
@@ -22,4 +23,4 @@
   (when-not (test/successful? m)
     (set! (.-exitCode js/process) 1)))
 
-(test/run-tests 'kuro.ansi-test 'kuro.stream-test 'kuro.terminal-test)
+(test/run-tests 'kuro.ansi-test 'kuro.checkpoint-test 'kuro.stream-test 'kuro.terminal-test)
