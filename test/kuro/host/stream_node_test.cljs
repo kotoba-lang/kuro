@@ -101,6 +101,23 @@
                               "we must not claim xterm over a pipe")
                           (done))})))
 
+(deftest no-shell-interpolation-on-the-streaming-path-too
+  (testing "README enforce row 'no shell interpolation': the guarantee belongs
+            to the provider, not to one implementation. argv reaches the binary
+            verbatim over cp/spawn with :shell false, exactly as in
+            kuro.host.node — $HOME is a literal, && is a plain argument."
+    (async done
+      (-> (sh/run-async (safe)
+                        (t/command [node "-e"
+                                    "process.stdout.write(process.argv.slice(1).join(' '))"
+                                    "$HOME" "&&" "whoami"])
+                        {:repo-root "."})
+          (.then (fn [r]
+                   (is (= 0 (:kuro/exit-code r)))
+                   (is (= "$HOME && whoami" (:kuro/stdout r))
+                       "no expansion, no shell metacharacter interpretation")
+                   (done)))))))
+
 (deftest run-async-resolves-to-a-receipt
   (async done
     (-> (sh/run-async (safe) (emit "process.stdout.write('ok')") {:repo-root "."})
