@@ -118,6 +118,24 @@
                (sh/start (t/session "s1" "repo-cid" :terminal-repo {:kuro/cwd ".."})
                          (emit "0") {:repo-root "."}))))
 
+(deftest stream-receipt-never-omits-isolation
+  (testing "README: every receipt carries :kuro/isolation, defaulting to :none —
+            a receipt that omits it would be read as though it had been isolated.
+            The streaming path goes through stream/finish → t/receipt, so the
+            key must be there even though no host code ever names it."
+    (async done
+      (sh/start (safe)
+                (emit "process.stdout.write('ok')")
+                {:repo-root "."
+                 :on-exit (fn [r]
+                            (is (contains? r :kuro/isolation)
+                                "omitted isolation reads as isolation")
+                            (is (= :none (:kuro/isolation r)))
+                            (is (map? r))
+                            (is (every? #(= "kuro" (namespace %)) (keys r))
+                                "receipt keys are all :kuro/*")
+                            (done))}))))
+
 (deftest run-async-resolves-to-a-receipt
   (async done
     (-> (sh/run-async (safe) (emit "process.stdout.write('ok')") {:repo-root "."})
