@@ -27,6 +27,7 @@
   この repo の依存方針に関わる別の決定**なので、ここでは踏み込まない。
   `TERM=dumb` を宣言環境に入れて、子に嘘をつかないようにしている。"
   (:require ["node:child_process" :as cp]
+            [kuro.host.cid :as cid]
             [kuro.host.node :as node]
             [kuro.stream :as stream]
             [kuro.terminal :as t]))
@@ -85,9 +86,18 @@
                 (when-not @done?
                   (reset! done? true)
                   (let [finished (now)
+                        ;; README「content-addressed output」は sync 側だけの
+                        ;; 保証にしない: streaming の receipt も sync と同じ
+                        ;; CIDv1/raw/sha2-256 を持つ。text-of は UTF-8 文字列を
+                        ;; 返し、text-cid はその UTF-8 byte 列にハッシュする ——
+                        ;; sync 側が Buffer にハッシュするのと同じ byte 列。
+                        stdout-cid (cid/text-cid (stream/text-of @st :stdout))
+                        stderr-cid (cid/text-cid (stream/text-of @st :stderr))
                         receipt (stream/finish @st (merge {:started-at started
                                                            :finished-at finished
-                                                           :duration-ms (- finished started)}
+                                                           :duration-ms (- finished started)
+                                                           :stdout-cid stdout-cid
+                                                           :stderr-cid stderr-cid}
                                                           result))]
                     (swap! st stream/mark-finished)
                     (on-exit receipt)
