@@ -112,7 +112,21 @@
         (is (nil? bytes))
         (let [r (last (fs/receipts st2))]
           (is (= :block-missing (:kuro.fs/reason r)))
-          (is (string? (:kuro.fs/cid r)) "the receipt names the block that is gone"))))))
+          (is (string? (:kuro.fs/cid r)) "the receipt names the block that is gone"))))
+    (testing "ls: listing a file is :not-a-directory"
+      (let [[st1] (fs/write st "f.txt" some-bytes (fake-put blocks))
+            [st2 entries] (fs/ls st1 "f.txt")]
+        (is (nil? entries))
+        (is (= :not-a-directory (:kuro.fs/reason (last (fs/receipts st2)))))))
+    (testing "write/mkdir through a file parent is :path-blocked"
+      (let [[st1] (fs/write st "blocker" some-bytes (fake-put blocks))
+            [st2 cid] (fs/write st1 "blocker/child.txt" some-bytes (fake-put blocks))]
+        (is (nil? cid))
+        (is (= :path-blocked (:kuro.fs/reason (last (fs/receipts st2))))))
+      (let [[st1] (fs/write st "wall" some-bytes (fake-put blocks))
+            [st2 p] (fs/mkdir st1 "wall/d")]
+        (is (nil? p))
+        (is (= :path-blocked (:kuro.fs/reason (last (fs/receipts st2)))))))))
 
 (deftest rm-file-then-list
   (let [blocks (atom {})
