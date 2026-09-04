@@ -108,6 +108,9 @@
   入れる。"
   ([st] (abandon st {}))
   ([st result]
+   (when-not (contains? #{:running :orphaned} (:kuro/state st))
+     (throw (ex-info "abandon closes a run whose process died — a stream with another state already has a real ending"
+                     {:state (:kuro/state st)})))
    (stream/finish (assoc st :kuro/state :running)
                   (merge {:exit-code 129
                           :error "process did not survive its host"
