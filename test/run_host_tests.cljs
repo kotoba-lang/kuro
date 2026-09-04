@@ -10,6 +10,7 @@
 
 (ns run-host-tests
   (:require [cljs.test :as test]
+            [kuro.host.limits-test]
             [kuro.host.node-test]
             [kuro.host.stream-node-test]))
 
@@ -17,4 +18,4 @@
   (when-not (test/successful? m)
     (set! (.-exitCode js/process) 1)))
 
-(test/run-tests 'kuro.host.node-test 'kuro.host.stream-node-test)
+(test/run-tests 'kuro.host.limits-test 'kuro.host.node-test 'kuro.host.stream-node-test)
