@@ -24,7 +24,7 @@
             ["node:path" :as path]
             ["node:fs/promises" :as fsp]
             ["playwright" :refer [chromium]]
-            [clojure.string :as str]))
+))
 
 (def repo-root (.cwd js/process))
 (def tmp-dir (.join path repo-root "test" "browser" ".tmp"))

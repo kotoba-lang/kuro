@@ -1,37 +1,14 @@
 <!doctype html>
-<html><body><script type='module'>
+<html><head><script src='/js/fs-demo.js'></script></head>
+<body><script type='module'>
 window.addEventListener('error', (e) => { window.__failed = 'top: ' + e.message; });
 window.addEventListener('unhandledrejection', (e) => { window.__failed = 'rej: ' + (e.reason && e.reason.message || String(e.reason)); });
-
-// Fetch the real guest bytes served by the test server.
-const guestBytes = new Uint8Array(await (await fetch('./stream-guest.wasm')).arrayBuffer());
-const mod = await WebAssembly.instantiate(guestBytes, {});
-const exports = mod.instance.exports;
-
-// Drive the stream-browser contract: the guest 'run' invocation happens,
-// its memory output becomes a stdout chunk, and the i32 return becomes the
-// exit code (kuro streams text; the guest's numeric result is the exit).
-const results = {};
+// raw worker put probe BEFORE the cljs demo loads its scenario
+const probeWorker = new Worker('/kuro-opfs-worker.js');
+probeWorker.onmessage = (ev) => { window.__rawPut = JSON.stringify(ev.data); window.__probeDone = true; };
+probeWorker.postMessage({ 'kuro.opfs/type': 'request', 'kuro.opfs/id': 1, 'kuro.opfs/op': 'put',
+  'kuro.opfs/payload': { bytes: new Uint8Array([72, 73]) } });
 try {
-  // emulate the Worker-side reading of guest memory: run(a=40, b=2) => 42
-  const a = 40, b = 2;
-  const exitCode = exports.run(a, b);
-  const mem = new Uint8Array(exports.memory.buffer);
-  // read NUL-free text starting at 1024: bytes 1024..1030 = sum=NN
-  let text = '';
-  for (let i = 1024; i < 1030; i++) {
-    const c = mem[i];
-    if (c === 0) break;
-    text += String.fromCharCode(c);
-  }
-  results.chunk = {stream: 'stdout', text: text};
-  results.exitCode = Number(exitCode);
-  results.guestBytesLen = guestBytes.length;
-  // kuro.stream state machine: open -> append-chunk -> finish
-  results.streamChunks = [results.chunk];
-  results.done = true;
-} catch (err) {
-  window.__failed = 'guest: ' + err.message;
-}
-window.__results = results;
+  window.window.fsE2E().then((r) => { window.__fsResults = r; window.__done = true; });
+} catch (err) { window.__failed = 'caught: ' + err.message; }
 </script></body></html>
