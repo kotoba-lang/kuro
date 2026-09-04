@@ -8,6 +8,7 @@
   },
   "devDependencies": {
     "nbb": "1.4.208",
-    "playwright": "^1.62.1"
+    "playwright": "^1.62.1",
+    "shadow-cljs": "^3.5.0"
   }
 }
