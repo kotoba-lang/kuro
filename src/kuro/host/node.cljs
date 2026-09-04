@@ -44,6 +44,17 @@
   {:timeout-ms 120000
    :max-output-bytes (* 1024 1024)})
 
+(defn default-timeout-ms
+  "The `:timeout-ms` the sync provider applies when the caller passes none —
+  the value the README table names. A fn so the table's default stays
+  referenceable from tests without poking at a private map's shape."
+  [] (:timeout-ms default-limits))
+
+(defn default-max-output-bytes
+  "The `:max-output-bytes` the sync provider applies when the caller passes
+  none — 1 MiB, the value the README table names."
+  [] (:max-output-bytes default-limits))
+
 (def default-env
   "The child's entire environment unless the caller declares another.
 
