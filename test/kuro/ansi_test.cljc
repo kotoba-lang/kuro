@@ -14,6 +14,23 @@
     (is (= "ab" (ansi/plain (str "a" e "]0;title\u0007b"))))   ; OSC + BEL
     (is (= "ab" (ansi/plain (str "a" e "(Bb"))))))         ; charset select
 
+(deftest private-csi-and-scroll-regions-are-discarded
+  (testing "README: 'cursor addressing, scroll regions, alternate screen — is
+            discarded, never printed'. Private-mode CSI (the `?` prefix) is
+            what real programs emit: `?25h/l` hide the cursor, `?1049h/l`
+            enter the alternate screen. `?` is 0x3f, below the 0x40-0x7e
+            final-byte window, so it must be read as a parameter — not left
+            in the body and not treated as text."
+    (is (= "ab" (ansi/plain (str "a" e "[?25lb"))))
+    (is (= "ab" (ansi/plain (str "a" e "[?1049h" e "[?1049l" "b")))))
+  (testing "scroll region (DECSTBM) and hide/show cursor around real text"
+    (is (= [[{:text "start" :style {}}] [{:text "end" :style {}}]]
+           (ansi/lines (str e "[2;5rstart\n" e "[?25h" "end" e "[?25l")))
+        "the text survives; the sequences around it are gone"))
+  (testing "an SGR still applies after a discarded private CSI"
+    (is (= [{:text "ok" :style {:fg "green"}}]
+           (ansi/spans (str e "[?1049h" e "[32mok" e "[?1049l"))))))
+
 (deftest colors
   (is (= [{:text "ok" :style {:fg "green"}}]
          (ansi/spans (str e "[32mok"))))
