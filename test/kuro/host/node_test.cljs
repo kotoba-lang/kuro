@@ -177,6 +177,19 @@
     (is (= 350 (:kuro/finished-at r)))
     (is (= 250 (:kuro/duration-ms r)))))
 
+(deftest sync-receipt-never-omits-isolation
+  (testing "README: every receipt carries :kuro/isolation, defaulting to :none —
+            a receipt that omits it would be read as though it had been isolated.
+            The sync path goes straight through t/receipt, so the key must be
+            there even though no host code ever names it."
+    (let [r (host/run (safe-session) (emit "process.stdout.write('ok')")
+                      {:repo-root "."})]
+      (is (contains? r :kuro/isolation)
+          "omitted isolation reads as isolation")
+      (is (= :none (:kuro/isolation r)))
+      (is (every? #(= "kuro" (namespace %)) (keys r))
+          "receipt keys are all :kuro/*"))))
+
 (deftest receipt-becomes-a-kotoba-fact
   (let [r (host/run (safe-session) (emit "0") {:repo-root "."})
         f (t/receipt-fact r)]
