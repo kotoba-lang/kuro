@@ -70,6 +70,36 @@
                        (t/command ["true"]) {:exit-code 0 :isolation :microvm})]
       (is (= :microvm (:kuro/isolation r))))))
 
+(deftest declared-modes-are-grant-scopes-with-defaults
+  ;; README の mode 表の全行 (:terminal-repo / :terminal-build / :terminal-agent
+  ;; / :terminal-host) が実装と一致すること。表に書いてあるのに model に無い
+  ;; grant は、読む側が存在しない権限を仮定してしまう。
+  (testing "every mode in the table exists and names its scope, not safety"
+    (is (= #{:terminal-repo :terminal-build :terminal-agent :terminal-host}
+           (set (keys t/terminal-modes)))))
+  (testing "labels name the scope; none claims safety"
+    (is (= {"repo"   :terminal-repo
+            "build"  :terminal-build
+            "agent"  :terminal-agent
+            "host"   :terminal-host}
+           (into {} (map (juxt :kuro/label :kuro/mode) (vals t/terminal-modes)))))) 
+  (testing ":terminal-build is repo write + cache + bounded net, not isolation"
+    (let [caps (:kuro/default-capabilities (t/terminal-modes :terminal-build))]
+      (is (contains? caps "repo/write"))
+      (is (contains? caps "net/fetch"))
+      (is (false? (:kuro/host? (t/terminal-modes :terminal-build))))))
+  (testing ":terminal-agent carries the checkpoint capability"
+    (let [caps (:kuro/default-capabilities (t/terminal-modes :terminal-agent))]
+      (is (contains? caps "agent/checkpoint"))
+      (is (not (contains? caps "repo/write")))))
+  (testing "sessions in these modes get the declared defaults as their grant"
+    (is (contains? (t/effective-capabilities
+                     (t/session "b1" "cid:repo" :terminal-build))
+                   "cache/write"))
+    (is (contains? (t/effective-capabilities
+                     (t/session "a1" "cid:repo" :terminal-agent))
+                   "agent/checkpoint"))))
+
 (deftest mode-name-does-not-claim-safety
   (testing "the default mode is named for its grant scope, not for isolation"
     (is (contains? t/terminal-modes :terminal-repo))
