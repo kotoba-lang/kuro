@@ -25,6 +25,34 @@
       (is (nil? (:stdout rcpt)) "the bare key is gone")
       (is (every? #(= "kuro" (namespace %)) (remove #{:kotoba/type} (keys rcpt)))))))
 
+(deftest command-argv-is-validated-not-assumed
+  ;; README の例では command は常に正しい形で現れるが、session と同じく
+  ;; 「読む側が存在しない command を仮定しない」ための検証が model 側にある。
+  ;; 壊れた argv が model を通ると、receipt の :kuro/argv が検査されずに
+  ;; 台帳に入る —— 検証は host に任せず、ここで固定する。
+  (testing "a non-vector is refused"
+    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+                 (t/command '("echo" "hi"))))
+    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+                 (t/command "echo hi")))
+    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+                 (t/command nil))))
+  (testing "an empty vector is refused — a command with no argv runs nothing"
+    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+                 (t/command []))))
+  (testing "a non-string element is refused"
+    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+                 (t/command ["echo" 42])))
+    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+                 (t/command ["echo" nil]))))
+  (testing "a blank string element is refused"
+    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+                 (t/command ["echo" ""])))
+    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+                 (t/command ["echo" "   "]))))
+  (testing "a valid argv passes and round-trips"
+    (is (= ["echo" "hi"] (:kuro/argv (t/command ["echo" "hi"]))))))
+
 (deftest receipt-drops-undeclared-result-keys
   (testing "a host cannot widen the receipt shape by adding keys"
     (let [rcpt (t/receipt (t/session "s1" "cid:repo" :terminal-repo)
