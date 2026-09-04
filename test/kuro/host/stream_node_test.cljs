@@ -3,6 +3,7 @@
   必ず確認する —— 呼ばれなければタイムアウトで落ちる（黙って通らない）。"
   (:require [clojure.string :as str]
             [cljs.test :refer [deftest is testing async]]
+            [kuro.host.cid :as cid]
             [kuro.host.stream-node :as sh]
             [kuro.stream :as stream]
             [kuro.terminal :as t]))
@@ -101,22 +102,40 @@
                               "we must not claim xterm over a pipe")
                           (done))})))
 
-(deftest no-shell-interpolation-on-the-streaming-path-too
-  (testing "README enforce row 'no shell interpolation': the guarantee belongs
-            to the provider, not to one implementation. argv reaches the binary
-            verbatim over cp/spawn with :shell false, exactly as in
-            kuro.host.node — $HOME is a literal, && is a plain argument."
+(deftest stream-environment-is-declared-not-inherited
+  (testing "the same guarantee as kuro.host.node: a variable set in the host
+            process does not reach a streaming child either"
+    (aset (.-env js/process) "KURO_HOST_MARKER" "leaked")
     (async done
-      (-> (sh/run-async (safe)
-                        (t/command [node "-e"
-                                    "process.stdout.write(process.argv.slice(1).join(' '))"
-                                    "$HOME" "&&" "whoami"])
-                        {:repo-root "."})
-          (.then (fn [r]
-                   (is (= 0 (:kuro/exit-code r)))
-                   (is (= "$HOME && whoami" (:kuro/stdout r))
-                       "no expansion, no shell metacharacter interpretation")
-                   (done)))))))
+      (sh/start (safe)
+                (emit "process.stdout.write(String(process.env.KURO_HOST_MARKER))")
+                {:repo-root "."
+                 :on-exit (fn [r]
+                            (is (= "undefined" (:kuro/stdout r)))
+                            (done))}))))
+
+(deftest stream-cwd-escape-throws
+  (is (thrown? ExceptionInfo
+               (sh/start (t/session "s1" "repo-cid" :terminal-repo {:kuro/cwd ".."})
+                         (emit "0") {:repo-root "."}))))
+
+(deftest stream-receipt-never-omits-isolation
+  (testing "README: every receipt carries :kuro/isolation, defaulting to :none —
+            a receipt that omits it would be read as though it had been isolated.
+            The streaming path goes through stream/finish → t/receipt, so the
+            key must be there even though no host code ever names it."
+    (async done
+      (sh/start (safe)
+                (emit "process.stdout.write('ok')")
+                {:repo-root "."
+                 :on-exit (fn [r]
+                            (is (contains? r :kuro/isolation)
+                                "omitted isolation reads as isolation")
+                            (is (= :none (:kuro/isolation r)))
+                            (is (map? r))
+                            (is (every? #(= "kuro" (namespace %)) (keys r))
+                                "receipt keys are all :kuro/*")
+                            (done))}))))
 
 (deftest run-async-resolves-to-a-receipt
   (async done
@@ -125,6 +144,22 @@
                  (is (= "ok" (:kuro/stdout r)))
                  (is (= 0 (:kuro/exit-code r)))
                  (done))))))
+
+(deftest receipt-is-content-addressed
+  (testing "README 'content-addressed output' is a both-providers guarantee —
+            the streaming receipt carries the same CIDv1/raw/sha2-256 as the
+            sync one, not just the bytes"
+    (async done
+      (sh/start (safe)
+                (emit "process.stdout.write('ok'); process.stderr.write('boom')")
+                {:repo-root "."
+                 :on-exit (fn [r]
+                            (is (= (cid/text-cid "ok") (:kuro/stdout-cid r)))
+                            (is (= (cid/text-cid "boom") (:kuro/stderr-cid r)))
+                            (testing "the CID is of the same bytes the receipt carries"
+                              (is (= "bafkrei" (subs (:kuro/stdout-cid r) 0 7)))
+                              (is (= 2 (:kuro/stdout-bytes r))))
+                            (done))}))))
 
 (deftest live-state-is-observable-while-running
   (testing "the caller can read progress without waiting for exit"
@@ -145,3 +180,20 @@
                                   "state was already readable at the first chunk")
                               (is (= 0 (:kuro/exit-code r)))
                               (done))})))))
+
+(deftest no-shell-interpolation-on-the-streaming-path-too
+  (testing "README enforce row 'no shell interpolation': the guarantee belongs
+            to the provider, not to one implementation. argv reaches the binary
+            verbatim over cp/spawn with :shell false, exactly as in
+            kuro.host.node — $HOME is a literal, && is a plain argument."
+    (async done
+      (-> (sh/run-async (safe)
+                        (t/command [node "-e"
+                                    "process.stdout.write(process.argv.slice(1).join(' '))"
+                                    "$HOME" "&&" "whoami"])
+                        {:repo-root "."})
+          (.then (fn [r]
+                   (is (= 0 (:kuro/exit-code r)))
+                   (is (= "$HOME && whoami" (:kuro/stdout r))
+                       "no expansion, no shell metacharacter interpretation")
+                   (done)))))))

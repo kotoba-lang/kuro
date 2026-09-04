@@ -14,6 +14,23 @@
     (is (= "ab" (ansi/plain (str "a" e "]0;title\u0007b"))))   ; OSC + BEL
     (is (= "ab" (ansi/plain (str "a" e "(Bb"))))))         ; charset select
 
+(deftest private-csi-and-scroll-regions-are-discarded
+  (testing "README: 'cursor addressing, scroll regions, alternate screen — is
+            discarded, never printed'. Private-mode CSI (the `?` prefix) is
+            what real programs emit: `?25h/l` hide the cursor, `?1049h/l`
+            enter the alternate screen. `?` is 0x3f, below the 0x40-0x7e
+            final-byte window, so it must be read as a parameter — not left
+            in the body and not treated as text."
+    (is (= "ab" (ansi/plain (str "a" e "[?25lb"))))
+    (is (= "ab" (ansi/plain (str "a" e "[?1049h" e "[?1049l" "b")))))
+  (testing "scroll region (DECSTBM) and hide/show cursor around real text"
+    (is (= [[{:text "start" :style {}}] [{:text "end" :style {}}]]
+           (ansi/lines (str e "[2;5rstart\n" e "[?25h" "end" e "[?25l")))
+        "the text survives; the sequences around it are gone"))
+  (testing "an SGR still applies after a discarded private CSI"
+    (is (= [{:text "ok" :style {:fg "green"}}]
+           (ansi/spans (str e "[?1049h" e "[32mok" e "[?1049l"))))))
+
 (deftest colors
   (is (= [{:text "ok" :style {:fg "green"}}]
          (ansi/spans (str e "[32mok"))))
@@ -28,6 +45,29 @@
     (is (= {:fg "red"} (ansi/apply-sgr {:fg "red" :bold true} [22]))))
   (testing "CSI m with no parameters is a reset (ECMA-48: omitted parameter = 0)"
     (is (= [{:text "x" :style {}}] (ansi/spans (str e "[31m" e "[mx"))))))
+
+(deftest text-attributes-and-their-own-resets
+  ;; README「Handled」の SGR 属性行: dim/italic/underline/inverse/strike と、
+  ;; それぞれの reset (22/23/24/27/29)。reset は同じ系列の属性だけを落とし、
+  ;; 他は残す (ECMA-48)。設定だけ試して reset を試さないと、消えない属性が
+  ;; 次の行まで染みる regression を見逃す。
+  (testing "each attribute is set by its code"
+    (is (= {:dim true}      (:style (first (ansi/spans (str e "[2mx"))))))
+    (is (= {:italic true}   (:style (first (ansi/spans (str e "[3mx"))))))
+    (is (= {:underline true} (:style (first (ansi/spans (str e "[4mx"))))))
+    (is (= {:inverse true}  (:style (first (ansi/spans (str e "[7mx"))))))
+    (is (= {:strike true}   (:style (first (ansi/spans (str e "[9mx")))))))
+  (testing "each reset clears only its own family"
+    (is (= {}               (ansi/apply-sgr {:bold true :dim true} [22]))
+        "22 = normal intensity: clears bold AND dim (ECMA-48)")
+    (is (= {:bold true}     (ansi/apply-sgr {:bold true :italic true} [23])))
+    (is (= {:bold true}     (ansi/apply-sgr {:bold true :underline true} [24])))
+    (is (= {:bold true}     (ansi/apply-sgr {:bold true :inverse true} [27])))
+    (is (= {:bold true}     (ansi/apply-sgr {:bold true :strike true} [29])))
+    (is (= {}               (ansi/apply-sgr {:dim true :italic true :underline true
+                                                :inverse true :strike true} [22 23 24 27 29])))
+    (is (= {:strike true :fg "red"} (ansi/apply-sgr {:strike true :fg "red"} [22]))
+        "22 clears bold/dim, not colour — off-family attributes survive")))
 
 (deftest adjacent-same-style-is-one-span
   (is (= [{:text "abc" :style {:fg "red"}}]
