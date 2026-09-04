@@ -99,20 +99,21 @@ try {
                                                                  "(async function(){ const t0 = Date.now(); while (Date.now() - t0 < 20000) { if (window.__done) { return JSON.stringify({results: window.__fsResults, rawPut: window.__rawPut}); } if (window.__failed) { return JSON.stringify({failed: window.__failed}); } await new Promise(r => setTimeout(r, 100)); } return JSON.stringify({failed: 'timeout'}); })()")))
                                              (.then (fn [raw]
                                                       (let [parsed (js/JSON.parse raw)
-                                                        r (js->clj (.-results parsed) :keywordize-keys true)
-                                                        put-reply (.-putReply parsed)]
+                                                        r (js->clj (.-results parsed) :keywordize-keys true)]
                                                         (if (:failed parsed)
                                                           (do (report! {:page-failed (:failed r)})
                                                               (report! {:verdict "FAIL"})
                                                               (set! (.-exitCode js/process) 1))
                                                           (let [raw-cid (some-> (.-rawPut parsed) js/JSON.parse (aget "kuro.opfs/result") (aget "cid"))
                                                          ok? (and raw-cid
+                                                                         (:wroteCid r)
+                                                                         (str/starts-with? (:wroteCid r) "bafkrei")
                                                                          (str/starts-with? raw-cid "bafkrei")
                                                                          (= "hello from kuro.fs" (:readText r))
                                                                          (:readMatches r)
                                                                          (pos? (:receiptCount r))
                                                                          (zero? (:denials r)))]
-                                                            (report! {:fs-e2e r :put-reply put-reply :raw-put (.-rawPut parsed)})
+                                                            (report! {:fs-e2e r :raw-put (.-rawPut parsed)})
                                                             (report! {:verdict (if ok? "PASS" "FAIL")})
                                                             (when-not ok?
                                                               (set! (.-exitCode js/process) 1)))))))

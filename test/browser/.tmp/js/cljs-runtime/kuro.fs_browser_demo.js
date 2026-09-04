@@ -51,7 +51,7 @@ var st0 = kuro.fs.store.cljs$core$IFn$_invoke$arity$1("bafyrei-root");
 var text_in = "hello from kuro.fs";
 var content = kuro.fs_browser_demo.bytes__GT_js(text_in);
 return kuro.fs_browser_demo.call_worker(new cljs.core.Keyword(null,"put","put",1299772570),new cljs.core.PersistentArrayMap(null, 1, [new cljs.core.Keyword(null,"bytes","bytes",1175866680),content], null)).then((function (reply){
-var cid = (reply["cid"]);
+var cid = cljs.core.get.cljs$core$IFn$_invoke$arity$2(reply,"cid");
 var vec__20067 = kuro.fs.write(st0,"greeting.txt",content,(function (_b){
 return cid;
 }));
@@ -69,7 +69,7 @@ return null;
 }));
 var st3 = cljs.core.nth.cljs$core$IFn$_invoke$arity$3(vec__20073,(0),null);
 var bytes = cljs.core.nth.cljs$core$IFn$_invoke$arity$3(vec__20073,(1),null);
-return ({"wroteCid": String(cid), "readText": (cljs.core.truth_(bytes)?(new TextDecoder()).decode(bytes):null), "lsEntries": cljs.core.clj__GT_js(entries), "readMatches": (cljs.core.truth_(bytes)?cljs.core._EQ_.cljs$core$IFn$_invoke$arity$2(text_in,(new TextDecoder()).decode(bytes)):null), "receiptCount": cljs.core.count(kuro.fs.receipts(st3)), "denials": cljs.core.count(cljs.core.filter.cljs$core$IFn$_invoke$arity$2((function (p1__20066_SHARP_){
+return ({"wroteCid": cid, "readText": (cljs.core.truth_(bytes)?(new TextDecoder()).decode(bytes):null), "lsEntries": cljs.core.clj__GT_js(entries), "readMatches": (cljs.core.truth_(bytes)?cljs.core._EQ_.cljs$core$IFn$_invoke$arity$2(text_in,(new TextDecoder()).decode(bytes)):null), "receiptCount": cljs.core.count(kuro.fs.receipts(st3)), "denials": cljs.core.count(cljs.core.filter.cljs$core$IFn$_invoke$arity$2((function (p1__20066_SHARP_){
 return cljs.core._EQ_.cljs$core$IFn$_invoke$arity$2(new cljs.core.Keyword("kuro.fs","denied","kuro.fs/denied",-2058388799),new cljs.core.Keyword("kuro.fs","type","kuro.fs/type",2010862720).cljs$core$IFn$_invoke$arity$1(p1__20066_SHARP_));
 }),kuro.fs.receipts(st3)))});
 }));

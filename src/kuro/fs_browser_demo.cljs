@@ -55,12 +55,12 @@
         content (bytes->js text-in)]
     (-> (call-worker :put {:bytes content})
         (.then (fn [reply]
-                 (let [cid (aget reply "cid")
+                 (let [cid (get reply "cid")
                        [st1 _cid] (fs/write st0 "greeting.txt" content (fn [_b] cid))
                        [st2 entries] (fs/ls st1 ".")
                        [st3 bytes] (fs/read-file st2 "greeting.txt"
                                                  (fn [c] (if (= c cid) content nil)))]
-                   #js {"wroteCid" (js/String cid) ;; KNOWN GAP: reply.result loses cid (S4 follow-up)
+                   #js {"wroteCid" cid
                         "readText" (when bytes (.decode (js/TextDecoder.) bytes))
                         "lsEntries" (clj->js entries)
                         "readMatches" (when bytes (= text-in (.decode (js/TextDecoder.) bytes)))
