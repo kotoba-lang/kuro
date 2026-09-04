@@ -1,0 +1,60 @@
+<!doctype html>
+<html><body><script type='module'>
+window.addEventListener('error', (e) => { window.__failed = 'top: ' + e.message; });
+window.addEventListener('unhandledrejection', (e) => { window.__failed = 'rej: ' + (e.reason && e.reason.message || String(e.reason)); });
+const worker = new Worker('./kuro-opfs-worker.js');
+let nextId = 1;
+const pending = new Map();
+
+worker.onmessage = (ev) => {
+  const m = ev.data;
+  const id = m['kuro.opfs/id'];
+  const p = pending.get(id);
+  if (p) { pending.delete(id); p(m); }
+};
+
+function call(op, payload) {
+  return new Promise((resolve) => {
+    const id = nextId++;
+    pending.set(id, resolve);
+    worker.postMessage({
+      'kuro.opfs/type': 'request',
+      'kuro.opfs/id': id,
+      'kuro.opfs/op': op,
+      'kuro.opfs/payload': payload || {},
+    });
+  });
+}
+
+const results = {};
+
+const bytes = new Uint8Array([104, 101, 108, 108, 111]);
+const put = await call('put', { bytes });
+results.putCid = put['kuro.opfs/result']?.cid ?? null;
+results.putError = put['kuro.opfs/error'];
+
+if (results.putCid) {
+  const got = await call('get', { cid: results.putCid });
+  const back = got['kuro.opfs/result']?.bytes;
+  results.getMatches = back instanceof Uint8Array &&
+    back.length === bytes.length &&
+    back.every((b, i) => b === bytes[i]);
+}
+
+const miss = await call('get', { cid: 'bafkrei000000000000000000000000000000000000000000000000000000' });
+results.missIsNull = miss['kuro.opfs/result']?.bytes === null && miss['kuro.opfs/error'] === null;
+
+const st1 = await call('stats', {});
+results.statsAfterPut = st1['kuro.opfs/result']?.count;
+
+await call('drop-cache', {});
+const st2 = await call('stats', {});
+results.statsAfterDrop = st2['kuro.opfs/result']?.count;
+const got2 = await call('get', { cid: results.putCid });
+results.missAfterDrop = got2['kuro.opfs/result']?.bytes === null;
+
+const bad = await call('publish', { cids: ['bafkrei-fake'], bytesByCid: { 'bafkrei-fake': bytes } });
+results.publishMismatchRefused = bad['kuro.opfs/error'] === 'cid-mismatch';
+
+window.__results = results;
+</script></body></html>

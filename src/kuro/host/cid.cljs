@@ -61,3 +61,21 @@
   "raw-cid of the UTF-8 encoding of `s`."
   [^string s]
   (raw-cid (js/Buffer.from s "utf8")))
+
+(defn sha256-raw-cid
+  "raw-cid of a Uint8Array — the browser/Worker-facing name.
+
+  `raw-cid` above is typed against node:crypto's Buffer (the Node host path).
+  This fn accepts a plain Uint8Array so the same mint can run anywhere the
+  digest is supplied (the OPFS Worker computes sha-256 via WebCrypto and
+  calls this with the digest bytes; see kuro.host.opfs). Header 0x01 0x55
+  0x12 0x20 = CIDv1 / raw / sha2-256, always `bafkrei…`."
+  [^js buf]
+  (let [digest (js/Uint8Array. (.from js/Array buf))
+        cid (js/Uint8Array. 36)]
+    (aset cid 0 0x01)
+    (aset cid 1 0x55)
+    (aset cid 2 0x12)
+    (aset cid 3 0x20)
+    (.set cid digest 4)
+    (str "b" (base32-lower-no-pad cid))))
