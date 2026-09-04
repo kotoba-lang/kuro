@@ -2,59 +2,36 @@
 <html><body><script type='module'>
 window.addEventListener('error', (e) => { window.__failed = 'top: ' + e.message; });
 window.addEventListener('unhandledrejection', (e) => { window.__failed = 'rej: ' + (e.reason && e.reason.message || String(e.reason)); });
-const worker = new Worker('./kuro-opfs-worker.js');
-let nextId = 1;
-const pending = new Map();
 
-worker.onmessage = (ev) => {
-  const m = ev.data;
-  const id = m['kuro.opfs/id'];
-  const p = pending.get(id);
-  if (p) { pending.delete(id); p(m); }
-};
+// Fetch the real guest bytes served by the test server.
+const guestBytes = new Uint8Array(await (await fetch('./stream-guest.wasm')).arrayBuffer());
+const mod = await WebAssembly.instantiate(guestBytes, {});
+const exports = mod.instance.exports;
 
-function call(op, payload) {
-  return new Promise((resolve) => {
-    const id = nextId++;
-    pending.set(id, resolve);
-    worker.postMessage({
-      'kuro.opfs/type': 'request',
-      'kuro.opfs/id': id,
-      'kuro.opfs/op': op,
-      'kuro.opfs/payload': payload || {},
-    });
-  });
-}
-
+// Drive the stream-browser contract: the guest 'run' invocation happens,
+// its memory output becomes a stdout chunk, and the i32 return becomes the
+// exit code (kuro streams text; the guest's numeric result is the exit).
 const results = {};
-
-const bytes = new Uint8Array([104, 101, 108, 108, 111]);
-const put = await call('put', { bytes });
-results.putCid = put['kuro.opfs/result']?.cid ?? null;
-results.putError = put['kuro.opfs/error'];
-
-if (results.putCid) {
-  const got = await call('get', { cid: results.putCid });
-  const back = got['kuro.opfs/result']?.bytes;
-  results.getMatches = back instanceof Uint8Array &&
-    back.length === bytes.length &&
-    back.every((b, i) => b === bytes[i]);
+try {
+  // emulate the Worker-side reading of guest memory: run(a=40, b=2) => 42
+  const a = 40, b = 2;
+  const exitCode = exports.run(a, b);
+  const mem = new Uint8Array(exports.memory.buffer);
+  // read NUL-free text starting at 1024: bytes 1024..1030 = sum=NN
+  let text = '';
+  for (let i = 1024; i < 1030; i++) {
+    const c = mem[i];
+    if (c === 0) break;
+    text += String.fromCharCode(c);
+  }
+  results.chunk = {stream: 'stdout', text: text};
+  results.exitCode = Number(exitCode);
+  results.guestBytesLen = guestBytes.length;
+  // kuro.stream state machine: open -> append-chunk -> finish
+  results.streamChunks = [results.chunk];
+  results.done = true;
+} catch (err) {
+  window.__failed = 'guest: ' + err.message;
 }
-
-const miss = await call('get', { cid: 'bafkrei000000000000000000000000000000000000000000000000000000' });
-results.missIsNull = miss['kuro.opfs/result']?.bytes === null && miss['kuro.opfs/error'] === null;
-
-const st1 = await call('stats', {});
-results.statsAfterPut = st1['kuro.opfs/result']?.count;
-
-await call('drop-cache', {});
-const st2 = await call('stats', {});
-results.statsAfterDrop = st2['kuro.opfs/result']?.count;
-const got2 = await call('get', { cid: results.putCid });
-results.missAfterDrop = got2['kuro.opfs/result']?.bytes === null;
-
-const bad = await call('publish', { cids: ['bafkrei-fake'], bytesByCid: { 'bafkrei-fake': bytes } });
-results.publishMismatchRefused = bad['kuro.opfs/error'] === 'cid-mismatch';
-
 window.__results = results;
 </script></body></html>
