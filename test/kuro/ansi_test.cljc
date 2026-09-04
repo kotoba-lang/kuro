@@ -29,6 +29,29 @@
   (testing "CSI m with no parameters is a reset (ECMA-48: omitted parameter = 0)"
     (is (= [{:text "x" :style {}}] (ansi/spans (str e "[31m" e "[mx"))))))
 
+(deftest text-attributes-and-their-own-resets
+  ;; README「Handled」の SGR 属性行: dim/italic/underline/inverse/strike と、
+  ;; それぞれの reset (22/23/24/27/29)。reset は同じ系列の属性だけを落とし、
+  ;; 他は残す (ECMA-48)。設定だけ試して reset を試さないと、消えない属性が
+  ;; 次の行まで染みる regression を見逃す。
+  (testing "each attribute is set by its code"
+    (is (= {:dim true}      (:style (first (ansi/spans (str e "[2mx"))))))
+    (is (= {:italic true}   (:style (first (ansi/spans (str e "[3mx"))))))
+    (is (= {:underline true} (:style (first (ansi/spans (str e "[4mx"))))))
+    (is (= {:inverse true}  (:style (first (ansi/spans (str e "[7mx"))))))
+    (is (= {:strike true}   (:style (first (ansi/spans (str e "[9mx")))))))
+  (testing "each reset clears only its own family"
+    (is (= {}               (ansi/apply-sgr {:bold true :dim true} [22]))
+        "22 = normal intensity: clears bold AND dim (ECMA-48)")
+    (is (= {:bold true}     (ansi/apply-sgr {:bold true :italic true} [23])))
+    (is (= {:bold true}     (ansi/apply-sgr {:bold true :underline true} [24])))
+    (is (= {:bold true}     (ansi/apply-sgr {:bold true :inverse true} [27])))
+    (is (= {:bold true}     (ansi/apply-sgr {:bold true :strike true} [29])))
+    (is (= {}               (ansi/apply-sgr {:dim true :italic true :underline true
+                                                :inverse true :strike true} [22 23 24 27 29])))
+    (is (= {:strike true :fg "red"} (ansi/apply-sgr {:strike true :fg "red"} [22]))
+        "22 clears bold/dim, not colour — off-family attributes survive")))
+
 (deftest adjacent-same-style-is-one-span
   (is (= [{:text "abc" :style {:fg "red"}}]
          (ansi/spans (str e "[31ma" e "[31mb" e "[31mc")))
