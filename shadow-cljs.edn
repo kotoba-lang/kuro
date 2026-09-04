@@ -4,5 +4,5 @@
   {:target     :browser
    :output-dir "test/browser/.tmp/js"
    :asset-path "/js"
-   :modules    {:fs-demo {:entries [kuro.fs-browser-demo]}}
+   :modules    {:fs-cap {:entries [kuro.fs-cap-demo]}}
    :release    {:compiler-options {:optimizations :simple}}}}}
