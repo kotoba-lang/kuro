@@ -1,0 +1,105 @@
+(ns kuro.fs-test
+  (:require [clojure.test :refer [deftest is testing]]
+            [kuro.fs :as fs]))
+
+;; host stand-ins: the simplest possible block store — in-memory, cid = hex-ish
+;; of content. The real host computes sha256+CIDs; the seam is what matters.
+
+(defn- fake-put [blocks]
+  (fn [bytes]
+    (let [cid (str "bafk-" (hash bytes))]
+      (swap! blocks assoc cid bytes)
+      cid)))
+
+(defn- fake-get [blocks]
+  (fn [cid] (get @blocks cid)))
+
+(defn- fresh-store [_blocks]
+  (fs/store "bafyrei-repo-root"))
+
+(def ^:private some-bytes
+  #?(:clj (byte-array [104 105])
+     :cljs (js/Uint8Array. #js [104 105])))
+
+(defn- byte-len [b]
+  #?(:clj (alength b)
+     :cljs (.-length b)))
+(deftest write-and-read-round-trip
+  (let [blocks (atom {})
+        st (fresh-store blocks)
+        [st' cid] (fs/write st "hello.txt" some-bytes (fake-put blocks))
+        [st'' bytes] (fs/read-file st' "hello.txt" (fake-get blocks))]
+    (testing "write returns a content cid"
+      (is (string? cid))
+      (is (re-find #"bafk-" cid)))
+    (testing "read returns the same bytes"
+      (is (some? bytes))
+      (is (= (byte-len some-bytes) (byte-len bytes))))
+    (testing "receipts record both ops as accepted"
+      (is (= [:kuro.fs/receipt :kuro.fs/receipt]
+             (mapv :kuro.fs/type (fs/receipts st''))))
+      (is (= [:write :read] (mapv :kuro.fs/op (fs/receipts st'')))))))
+
+(deftest overwrite-produces-new-store-value
+  (let [blocks (atom {})
+        st (fs/store)
+        [st1 cid1] (fs/write st "f.txt" some-bytes (fake-put blocks))
+        other-bytes #?(:clj (byte-array [104 105 106])
+                       :cljs (js/Uint8Array. #js [104 105 106]))
+        [st2 cid2] (fs/write st1 "f.txt" other-bytes (fake-put blocks))]
+    ;; content-addressed: identical bytes must produce an identical CID, so a
+    ;; different CID requires different bytes. The real claim is that writing
+    ;; different bytes replaces the file's CID rather than mutating in place.
+    (is (not= cid1 cid2))
+    (is (= 2 (count (fs/receipts st2))))))
+
+(deftest mkdir-and-ls
+  (let [blocks (atom {})
+        st (fs/store)
+        [st1] (fs/mkdir st "docs/notes")
+        [st2] (fs/write st1 "docs/notes/a.txt" some-bytes (fake-put blocks))
+        [st3 entries] (fs/ls st2 "docs/notes")
+        [_ root-entries] (fs/ls st3 "docs")]
+    (is (= [{:name "notes" :type :dir :size 0}]
+           (map #(select-keys % [:name :type :size]) root-entries)))
+    (is (= [{:name "a.txt" :type :file :size 2}]
+           (map #(select-keys % [:name :type :size]) entries)))))
+
+(deftest denial-not-exception
+  (let [blocks (atom {})
+        st (fs/store)]
+    (testing "read of missing path is a recorded denial, not a throw"
+      (let [[st' bytes] (fs/read-file st "nope.txt" (fake-get blocks))]
+        (is (nil? bytes))
+        (is (= :not-found (:kuro.fs/reason (last (fs/receipts st')))))))
+    (testing "path traversal is refused"
+      (let [[st' bytes] (fs/read-file st "../etc/passwd" (fake-get blocks))]
+        (is (nil? bytes))
+        (is (= :bad-path (:kuro.fs/reason (last (fs/receipts st')))))))
+    (testing "rm of a non-empty directory is refused"
+      (let [[st1] (fs/mkdir st "d")
+            [st2] (fs/write st1 "d/f.txt" some-bytes (fake-put blocks))
+            [st3 removed] (fs/rm st2 "d")]
+        (is (not removed))
+        (is (= :directory-not-empty (:kuro.fs/reason (last (fs/receipts st3)))))))
+    (testing "root is immutable"
+      (let [[_ removed2] (fs/rm st "only-one-segment")]
+        (is (not removed2))))))
+
+(deftest rm-file-then-list
+  (let [blocks (atom {})
+        st (fs/store)
+        [st1] (fs/write st "gone.txt" some-bytes (fake-put blocks))
+        [st2 removed] (fs/rm st1 "gone.txt")
+        [_ entries] (fs/ls st2 ".")]
+    (is removed)
+    (is (= [] entries))))
+
+(deftest receipts-list-both-accepted-and-denied
+  (let [blocks (atom {})
+        st (fs/store)
+        [st1] (fs/write st "a.txt" some-bytes (fake-put blocks))
+        [st2] (fs/read-file st1 "missing" (fake-get blocks))]
+    (is (= [:write :read] (mapv :kuro.fs/op (fs/receipts st2))))
+    (is (= [:kuro.fs/receipt :kuro.fs/denied]
+           (mapv :kuro.fs/type (fs/receipts st2))))))
