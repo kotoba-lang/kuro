@@ -49,6 +49,17 @@
       (is (= 137 (:kuro/exit-code r)))
       (is (= "OOM-killed" (:kuro/error r))))))
 
+(deftest abandon-refuses-a-run-that-has-a-real-ending
+  ;; README: "`cp/abandon` closes an **orphan** into a receipt" — orphan のみ。
+  ;; すでに終わった (:exited など) stream に 129 を捏造すると、台帳に
+  ;; 「起きてもいない終わり方」が載る。
+  (testing "an already-finished stream is refused, not closed as exit 129"
+    (let [exited (stream/mark-finished (running-stream))]
+      (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+                   (cp/abandon (cp/restore (cp/->edn exited)))))))
+  (testing "the legit path still works: restored orphan closes into a receipt"
+    (is (= 129 (:kuro/exit-code (cp/abandon (cp/restore (cp/->edn (running-stream)))))))))
+
 (deftest truncation-is-declared-not-silent
   (let [st (-> (stream/open (sess) (cmd))
                (stream/append-chunk {:stream :stdout :text "0123456789"}))
