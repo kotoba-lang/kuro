@@ -95,6 +95,25 @@
     (is removed)
     (is (= [] entries))))
 
+(deftest rm-of-an-empty-directory-succeeds
+  (testing "README / fs/rm docstring: 'Remove a file or an empty directory' —
+            the empty-dir half of that contract had no test: a regression that
+            made rm refuse every directory would still have been green."
+    (let [st (fs/store)]
+      (testing "an empty dir is removed, recorded, and listed as gone"
+        (let [[st1] (fs/mkdir st "empty")
+              [st2 removed] (fs/rm st1 "empty")]
+          (is (true? removed))
+          (is (= :kuro.fs/receipt (:kuro.fs/type (last (fs/receipts st2)))))
+          (let [[_ entries] (fs/ls st2 ".")]
+            (is (= [] entries)))))
+      (testing "rm of the now-missing dir again is a not-found denial"
+        (let [[st1] (fs/mkdir st "d")
+              [st2] (fs/rm st1 "d")
+              [st3 removed] (fs/rm st2 "d")]
+          (is (not removed))
+          (is (= :not-found (:kuro.fs/reason (last (fs/receipts st3))))))))))
+
 (deftest receipts-list-both-accepted-and-denied
   (let [blocks (atom {})
         st (fs/store)
