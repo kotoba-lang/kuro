@@ -191,6 +191,71 @@ it.
 cursor grid and no scrollback. A real PTY needs a native addon (node-pty or
 equivalent), which is a dependency decision this repo has not taken.
 
+## A browser backing — `kuro.fs` + `kuro.host.stream-browser`
+
+In a browser there is no process to spawn and no disk — so the host seam is
+filled differently, and the receipts say so.
+
+### `kuro.fs` — a filesystem whose substrate is a CID DAG
+
+`kuro.fs` is portable `.cljc` (the same source runs on the JVM, under nbb,
+and in a browser via the shadow-cljs build). Paths map onto a content-
+addressed DAG: a directory is an IPLD map block, a file is a unixfs file
+DAG (`tech-ipfs-specs-unixfs` — not re-implemented here). The host injects
+two effects:
+
+    put-block : bytes -> cid
+    get-block : cid -> bytes | nil
+
+The production wiring is an OPFS-backed cache in front of the kotobase
+gateway (`kuro.host.opfs`); tests use an in-memory atom. Writes are
+immutable — every write produces a new root, so undo is remembering a
+previous root. Denied work (path traversal, missing paths, non-empty-dir
+removal) produces recorded receipts, not exceptions — an empty receipt list
+must not mean both refused and never asked.
+
+### `kuro.host.opfs` — the block store Worker
+
+A dedicated Worker holds OPFS sync access handles (a Worker-only API) and
+speaks a closed op vocabulary (`put` / `get` / `delete` / `publish` /
+`stats` / `drop-cache`). CIDs are minted with WebCrypto sha-256 inside the
+Worker; the math is parity-locked with `kuro.host.cid` (node:crypto) and an
+independent Python mint. `publish` verifies each block's bytes hash to its
+claimed CID before counting it. OPFS is origin-scoped **cache** — durable
+custody is kotobase (`PUT/GET kotobase.net/ipld/:cid`), and publish is an
+explicit op, never automatic.
+
+### `kuro.host.stream-browser` — terminal host over a guest component
+
+The `stream-node` shape (start / write / kill / on-chunk / on-exit) with a
+guest-component backing instead of a spawned process. Commands are guest
+invocation specs (guest CID + export + args); **argv vectors are denied with
+`:argv-not-a-process`** — a browser has no processes, and a receipt that
+pretended otherwise would lie about what ran.
+
+### Isolation, on the record
+
+Every browser-host receipt carries `:kuro/isolation :browser-origin`, which
+records: ran in a Worker, no DOM, no ambient authority, effects only through
+capability-gated host imports. It does **not** claim kernel-level
+sandboxing — a capability set is an intent record, not a kernel (same rule
+as above). The gate is real where it can be: the host refuses to satisfy a
+guest's `fs_read` import unless the grant covers it, and fs/write implies
+nothing about fs/read (separate leaves).
+
+### Verified end-to-end
+
+- real OPFS round-trip with WebCrypto-minted CIDs (byte-identical across
+  node:crypto, WebCrypto-in-Worker, and an independent Python mint)
+- a real WASM guest (assembled with wasm-tools) streaming its output into
+  `kuro.stream` and finishing with an isolated receipt
+- `kuro.fs` itself running in the browser (shadow-cljs build) writing,
+  listing, and reading back byte-identical through the OPFS store
+- a guest reading a `kuro.fs`-written file through a gated `fs_read` import,
+  with the un-granted capability refused
+
+See `test/browser/verify_*.cljs` and ADR-2609041240.
+
 ## Tests
 
 ```sh
