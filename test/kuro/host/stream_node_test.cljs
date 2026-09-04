@@ -150,6 +150,24 @@
                                 "receipt keys are all :kuro/*")
                             (done))}))))
 
+(deftest run-async-resolves-a-denial-without-spawning
+  (async done
+    (testing "README: `run-async` resolves a denial **immediately** — the returned
+            value is the denial map, not a receipt, and no process is created.
+            A regression that drops the `(resolve h)` branch would leave the
+            promise forever pending: the caller hangs instead of failing."
+      (-> (sh/run-async (t/session "s1" "repo-cid" :terminal-repo
+                                   {:kuro/grant {:capabilities #{}}})
+                        (emit "process.stdout.write('SHOULD-NOT-RUN')")
+                        {:repo-root "."})
+          (.then (fn [out]
+                   (is (false? (:kuro/allowed? out)))
+                   (is (= :missing-capabilities (:kuro/reason out)))
+                   (is (= ["repo/read"] (:kuro/missing out)))
+                   (is (nil? (:kuro/exit-code out)) "a denial is not a receipt")
+                   (is (nil? (:kuro/stdout out)))
+                   (done)))))))
+
 (deftest run-async-resolves-to-a-receipt
   (async done
     (-> (sh/run-async (safe) (emit "process.stdout.write('ok')") {:repo-root "."})
