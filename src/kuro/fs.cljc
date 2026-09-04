@@ -65,6 +65,26 @@
   grant onto these; anything not granted produces a denial receipt."
   #{"fs/read" "fs/write" "fs/ls" "fs/rm" "fs/publish"})
 
+(def op-capabilities
+  "The capability each operation requires. `mkdir` creates nodes, so it is a
+  write, not a listing; `publish` is a host-side op (the block store's), not
+  a path op, so no path fn requires it."
+  {:read   "fs/read"
+   :write  "fs/write"
+   :ls     "fs/ls"
+   :mkdir  "fs/write"
+   :rm     "fs/rm"})
+
+(defn with-grant
+  "Constrain the store to `caps` (a subset of `default-capabilities`). The
+  grant is a value inside the store — same discipline as `kuro.terminal`'s
+  session grant — so a store handed to untrusted code carries its own limits
+  and every op records what it was refused for. Ops absent from the grant
+  produce a `:kuro.fs/denied` receipt with `:kuro.fs/missing`, not an
+  exception. Default (no `with-grant`) is the full vocabulary."
+  [st caps]
+  (assoc st :kuro.fs/grant (set caps)))
+
 ;; ---------------------------------------------------------------------------
 ;; paths
 ;; ---------------------------------------------------------------------------
@@ -96,7 +116,20 @@
    ;; host's block store; we keep CIDs here, never bytes.
    :kuro.fs/nodes {}
    :kuro.fs/root :root
+   ;; Default grant is the whole vocabulary; `with-grant` narrows it.
+   :kuro.fs/grant default-capabilities
    :kuro.fs/receipts []})
+
+(defn- check-grant
+  "Denial receipt when `op`'s capability is outside the store's grant, else
+  nil. The docstring's claim — a write without `fs/write` is a denial, not an
+  exception — is enforced here, once, for every path op."
+  [st op path]
+  (let [cap (get op-capabilities op)
+        grant (or (:kuro.fs/grant st) default-capabilities)]
+    (when (and cap (not (contains? grant cap)))
+      {:reason :missing-capability
+       :extra  {:kuro.fs/missing cap}})))
 
 (defn store
   "A fresh filesystem mounted at `mount-root` (a repo-root CID string)."
@@ -220,6 +253,8 @@
         segs (clean-path path)]
     (cond
       (nil? segs) (denied st op path :bad-path)
+      (check-grant st op path) (let [{:keys [reason extra]} (check-grant st op path)]
+                                 (denied st op path reason extra))
       :else (let [n (node-at (:kuro.fs/nodes st) segs)]
               (cond
                 (nil? n) (denied st op path :not-found)
@@ -242,6 +277,8 @@
         segs (clean-path path)]
     (cond
       (nil? segs) (denied st op path :bad-path)
+      (check-grant st op path) (let [{:keys [reason extra]} (check-grant st op path)]
+                                 (denied st op path reason extra))
       :else (let [n (node-at (:kuro.fs/nodes st) segs)]
               (cond
                 (nil? n) (denied st op path :not-found)
@@ -262,6 +299,8 @@
     (cond
       (nil? segs) (denied st op path :bad-path)
       (not (byte-seq? bytes)) (denied st op path :bytes-required)
+      (check-grant st op path) (let [{:keys [reason extra]} (check-grant st op path)]
+                                 (denied st op path reason extra))
       :else (let [n (node-at (:kuro.fs/nodes st) segs)]
               (cond
                 (= :dir (:type n)) (denied st op path :is-a-directory)
@@ -283,6 +322,8 @@
         segs (clean-path path)]
     (cond
       (nil? segs) (denied st op path :bad-path)
+      (check-grant st op path) (let [{:keys [reason extra]} (check-grant st op path)]
+                                 (denied st op path reason extra))
       :else (let [setp (set-path (:kuro.fs/nodes st) segs (dir-with {}))
                   nodes (first setp)]
               (if (or (nil? setp) (nil? nodes))
@@ -300,6 +341,8 @@
         segs (clean-path path)]
     (cond
       (nil? segs) (denied st op path :bad-path)
+      (check-grant st op path) (let [{:keys [reason extra]} (check-grant st op path)]
+                                 (denied st op path reason extra))
       :else (let [n (node-at (:kuro.fs/nodes st) segs)]
               (cond
                 (nil? n) (denied st op path :not-found)
