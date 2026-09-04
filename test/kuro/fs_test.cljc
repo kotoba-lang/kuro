@@ -103,3 +103,41 @@
     (is (= [:write :read] (mapv :kuro.fs/op (fs/receipts st2))))
     (is (= [:kuro.fs/receipt :kuro.fs/denied]
            (mapv :kuro.fs/type (fs/receipts st2))))))
+
+(deftest operations-outside-the-grant-are-denied-receipts-not-exceptions
+  ;; ns docstring: "a write without `fs/write` capability … returns a
+  ;; `:kuro.fs/denied` receipt" — and default-capabilities: "anything not
+  ;; granted produces a denial receipt". Until 2026-09-04 that was a claim
+  ;; with no mechanism: no path op consulted any grant. `with-grant` narrows
+  ;; the store's grant; every op that needs an absent capability records a
+  ;; denial (with `:kuro.fs/missing` naming the capability) and returns nil
+  ;; in the result slot — the same [store' nil] shape as every other denial.
+  (let [blocks (atom {})
+        st (-> (fs/store "bafyrei-root")
+               (fs/with-grant #{"fs/read"}))]
+    (testing "write is denied with the missing capability named"
+      (let [[st' cid] (fs/write st "no.txt" some-bytes (fake-put blocks))]
+        (is (nil? cid))
+        (is (empty? (:kuro.fs/nodes st')) "no node was created")
+        (let [r (last (fs/receipts st'))]
+          (is (= :kuro.fs/denied (:kuro.fs/type r)))
+          (is (= :write (:kuro.fs/op r)))
+          (is (= :missing-capability (:kuro.fs/reason r)))
+          (is (= "fs/write" (:kuro.fs/missing r))))))
+    (testing "rm and mkdir are denied too"
+      (let [[st' removed] (fs/rm st "anything")]
+        (is (nil? removed))
+        (is (= "fs/rm" (:kuro.fs/missing (last (fs/receipts st'))))))
+      (let [[st' p] (fs/mkdir st "d")]
+        (is (nil? p))
+        (is (= "fs/write" (:kuro.fs/missing (last (fs/receipts st')))))))
+    (testing "the granted capability still works"
+      (let [[st1] (fs/write (fs/store "bafyrei-root") "ok.txt" some-bytes (fake-put blocks))
+            [st2 bytes] (fs/read-file (fs/with-grant st1 #{"fs/read"})
+                                      "ok.txt" (fake-get blocks))]
+        (is (some? bytes))
+        (is (= :kuro.fs/receipt (:kuro.fs/type (last (fs/receipts st2)))))))
+    (testing "the default grant is the whole vocabulary — nothing changes for it"
+      (let [[st' cid] (fs/write (fs/store) "ok.txt" some-bytes (fake-put blocks))]
+        (is (string? cid))
+        (is (every? #(= :kuro.fs/receipt (:kuro.fs/type %)) (fs/receipts st')))))))
