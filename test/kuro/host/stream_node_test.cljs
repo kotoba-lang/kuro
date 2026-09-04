@@ -3,6 +3,7 @@
   必ず確認する —— 呼ばれなければタイムアウトで落ちる（黙って通らない）。"
   (:require [clojure.string :as str]
             [cljs.test :refer [deftest is testing async]]
+            [kuro.host.cid :as cid]
             [kuro.host.stream-node :as sh]
             [kuro.stream :as stream]
             [kuro.terminal :as t]))
@@ -143,6 +144,22 @@
                  (is (= "ok" (:kuro/stdout r)))
                  (is (= 0 (:kuro/exit-code r)))
                  (done))))))
+
+(deftest receipt-is-content-addressed
+  (testing "README 'content-addressed output' is a both-providers guarantee —
+            the streaming receipt carries the same CIDv1/raw/sha2-256 as the
+            sync one, not just the bytes"
+    (async done
+      (sh/start (safe)
+                (emit "process.stdout.write('ok'); process.stderr.write('boom')")
+                {:repo-root "."
+                 :on-exit (fn [r]
+                            (is (= (cid/text-cid "ok") (:kuro/stdout-cid r)))
+                            (is (= (cid/text-cid "boom") (:kuro/stderr-cid r)))
+                            (testing "the CID is of the same bytes the receipt carries"
+                              (is (= "bafkrei" (subs (:kuro/stdout-cid r) 0 7)))
+                              (is (= 2 (:kuro/stdout-bytes r))))
+                            (done))}))))
 
 (deftest live-state-is-observable-while-running
   (testing "the caller can read progress without waiting for exit"
