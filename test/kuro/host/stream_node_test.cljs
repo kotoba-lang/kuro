@@ -92,6 +92,19 @@
                           (is (str/includes? (:kuro/error r) "kuro-no-such-binary"))
                           (done))})))
 
+(deftest no-shell-interpolation-in-the-streaming-path
+  (testing "README 'The same guarantees apply — ... argv with no shell': the
+            streaming provider must hand argv to the binary verbatim too —
+            $HOME stays a literal, && is an argument, not a pipeline"
+    (async done
+      (sh/start (safe)
+                (t/command ["/bin/echo" "$HOME" "&&" "whoami"])
+                {:repo-root "."
+                 :on-exit (fn [r]
+                            (is (= "$HOME && whoami" (str/trim (:kuro/stdout r)))
+                                "argv reached node verbatim; no shell in between")
+                            (done))}))))
+
 (deftest term-is-dumb-because-a-pipe-is-not-a-terminal
   (async done
     (sh/start (safe)
