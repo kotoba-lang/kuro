@@ -101,6 +101,23 @@
                               "we must not claim xterm over a pipe")
                           (done))})))
 
+(deftest stream-environment-is-declared-not-inherited
+  (testing "the same guarantee as kuro.host.node: a variable set in the host
+            process does not reach a streaming child either"
+    (aset (.-env js/process) "KURO_HOST_MARKER" "leaked")
+    (async done
+      (sh/start (safe)
+                (emit "process.stdout.write(String(process.env.KURO_HOST_MARKER))")
+                {:repo-root "."
+                 :on-exit (fn [r]
+                            (is (= "undefined" (:kuro/stdout r)))
+                            (done))}))))
+
+(deftest stream-cwd-escape-throws
+  (is (thrown? ExceptionInfo
+               (sh/start (t/session "s1" "repo-cid" :terminal-repo {:kuro/cwd ".."})
+                         (emit "0") {:repo-root "."}))))
+
 (deftest run-async-resolves-to-a-receipt
   (async done
     (-> (sh/run-async (safe) (emit "process.stdout.write('ok')") {:repo-root "."})
