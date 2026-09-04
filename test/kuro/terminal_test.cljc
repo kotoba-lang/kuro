@@ -12,6 +12,29 @@
     (is (= 0 (:kuro/exit-code rcpt)))
     (is (= :kuro/terminal-receipt (:kotoba/type (t/receipt-fact rcpt))))))
 
+(deftest command-argv-is-a-plain-vector-of-non-blank-strings
+  (testing "README enforce row 'no shell interpolation' starts here: the model
+            itself only accepts an argv vector, so a single command *string* —
+            the shape a shell would take — is refused before any host sees it"
+    (is (= {:kuro/type :kuro/command :kuro/argv ["true" "-x"]}
+           (select-keys (t/command ["true" "-x"]) [:kuro/type :kuro/argv])))
+    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+                 (t/command "true && rm -rf /"))))
+  (testing "empty argv is refused — there is nothing to run, and 'whatever the
+            host defaults to' is not a decision the model makes"
+    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+                 (t/command []))))
+  (testing "blank elements are refused — a blank argv element is either a
+            quoting bug or an injection attempt; neither may reach spawn"
+    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+                 (t/command ["echo" ""])))
+    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+                 (t/command ["echo" "  "])))
+    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+                 (t/command ["echo" nil])))
+    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+                 (t/command ["echo" 42])))))
+
 (deftest receipt-is-one-namespace
   (testing "host-supplied result keys land in :kuro/*, not bare"
     (let [rcpt (t/receipt (t/session "s1" "cid:repo" :terminal-repo)
