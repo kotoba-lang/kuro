@@ -133,8 +133,14 @@
                       (emit "process.stdout.write(Object.keys(process.env).sort().join(','))")
                       {:repo-root "."})
           keys (set (str/split (:kuro/stdout r) #","))]
-      (is (= #{"LANG" "PATH"} (set/intersection keys #{"LANG" "PATH"})))
-      (is (empty? (set/difference keys #{"LANG" "PATH" "__CF_USER_TEXT_ENCODING"}))))))
+      (is (= #{"LANG" "PATH" "TERM"} (set/intersection keys #{"LANG" "PATH" "TERM"})))
+      (is (empty? (set/difference keys #{"LANG" "PATH" "TERM" "__CF_USER_TEXT_ENCODING"}))))
+    (testing "TERM=dumb, because a pipe is not a terminal — same guarantee as the streaming provider"
+      (let [r (host/run (safe-session)
+                        (emit "process.stdout.write(process.env.TERM + ':' + process.stdout.isTTY)")
+                        {:repo-root "."})]
+        (is (= "dumb:undefined" (:kuro/stdout r))
+            "we must not claim xterm over a pipe")))))
 
 (deftest no-shell-interpolation
   (testing "argv reaches the binary verbatim — $HOME is a literal, not expanded"

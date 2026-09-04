@@ -17,7 +17,7 @@
   | denial before execution | `kuro.terminal/denial` — no spawn happens on a missing capability |
   | no shell interpolation | `spawnSync` with an argv vector and `:shell false` |
   | cwd confinement | resolved path must stay under the session's repo root |
-  | no ambient environment | the child env is exactly the declared manifest; `process.env` is never passed |
+  | no ambient environment | the child env is exactly the declared manifest (`TERM=dumb` included); `process.env` is never passed |
   | bounded time | `:timeout-ms` (default 120 s) — exit 124, `:timed-out? true` |
   | bounded output | `:max-output-bytes` (default 1 MiB) — exit 125, `:truncated? true` |
   | content-addressed output | stdout/stderr CIDv1-raw in the receipt |
@@ -56,7 +56,8 @@
   is therefore everything this provider passes, not literally everything the
   child sees."
   {"PATH" "/usr/bin:/bin:/usr/local/bin"
-   "LANG" "C.UTF-8"})
+   "LANG" "C.UTF-8"
+   "TERM" "dumb"})
 
 (defn confine
   "Absolute path for `cwd` resolved under `repo-root`, or nil when it escapes.
