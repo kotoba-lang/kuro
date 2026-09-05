@@ -133,7 +133,7 @@
             "build"  :terminal-build
             "agent"  :terminal-agent
             "host"   :terminal-host}
-           (into {} (map (juxt :kuro/label :kuro/mode) (vals t/terminal-modes)))))) 
+           (into {} (map (juxt :kuro/label :kuro/mode) (vals t/terminal-modes))))))
   (testing ":terminal-build is repo write + cache + bounded net, not isolation"
     (let [caps (:kuro/default-capabilities (t/terminal-modes :terminal-build))]
       (is (contains? caps "repo/write"))
@@ -183,3 +183,29 @@
       (is (= ["clojure" "-M:test"] (:kuro/argv c)))
       (is (vector? (:kuro/argv c)))
       (is (every? string? (:kuro/argv c))))))
+
+(deftest append-event-appends-in-order
+  ;; kuro.terminal's public surface has one function with no test: append-event.
+  ;; It is the model-side ledger (:kuro/events, seeded as [] by t/session), and
+  ;; kobo's durable loop reads it — a regression that prepends, drops earlier
+  ;; events, or returns the session unchanged would make the ledger lie about
+  ;; the order things happened in. It is pure `.cljc`, so this pin runs on both
+  ;; runtimes (parity).
+  (testing "an event lands at the end, after what was already there"
+    (let [sess (t/append-event
+                (t/append-event (t/session "s1" "cid:repo" :terminal-repo)
+                                {:kuro/type :kuro/command-submitted})
+                {:kuro/type :kuro/receipt-recorded})]
+      (is (= [:kuro/command-submitted :kuro/receipt-recorded]
+             (mapv :kuro/type (:kuro/events sess))))))
+  (testing "the ledger is the only thing that changes — session fields are untouched"
+    (let [sess (t/session "s1" "cid:repo" :terminal-repo)
+          sess' (t/append-event sess {:kuro/type :kuro/command-submitted})]
+      (is (= (dissoc sess :kuro/events)
+             (dissoc sess' :kuro/events)))
+      (is (= [] (:kuro/events sess)) "a fresh session starts with an empty ledger")
+      (is (= 1 (count (:kuro/events sess'))))))
+  (testing "the appended value is stored verbatim — no reshaping, no key filtering"
+    (let [ev {:kuro/type :kuro/note :kuro/note-text "hello"}
+          sess' (t/append-event (t/session "s1" "cid:repo" :terminal-repo) ev)]
+      (is (= ev (peek (:kuro/events sess')))))))
