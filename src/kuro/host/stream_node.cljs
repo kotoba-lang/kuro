@@ -40,6 +40,14 @@
   能力を偽らない方が出力が読める。"
   (assoc node/default-env "TERM" "dumb"))
 
+(def default-timeout-ms
+  "The `:timeout-ms` the streaming provider applies when the caller passes
+  none - the value the README table names (120 s, same as the sync
+  provider's `kuro.host.node/default-timeout-ms`). A def so the table's
+  default stays referenceable from tests without poking at the inline
+  literal in `start`."
+  120000)
+
 (defn start
   "`cmd` を非同期に開始する。戻り値は
   `{:stream <atom of kuro.stream> :write fn :kill fn :pid n}`、
@@ -102,7 +110,7 @@
                     (swap! st stream/mark-finished)
                     (on-exit receipt)
                     receipt)))
-              timer (when-let [ms (:timeout-ms opts 120000)]
+              timer (when-let [ms (:timeout-ms opts default-timeout-ms)]
                       (js/setTimeout
                        (fn []
                          (when-not @done?
