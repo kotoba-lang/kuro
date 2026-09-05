@@ -71,6 +71,35 @@
   (testing "no cap means no truncation and no field"
     (is (nil? (:kuro.checkpoint/dropped-bytes (cp/->edn (running-stream)))))))
 
+(deftest a-truncated-orphan-closes-as-a-truncated-receipt
+  ;; README (kuro.checkpoint 節) は :max-chunk-bytes について「the byte
+  ;; counters keep the pre-truncation truth」と言い、kuro.stream 節は「a
+  ;; silently-cut receipt is indistinguishable from a short success」と言う。
+  ;; この接合を pin する: stream 層で切られた出力を持つ orphan を abandon した
+  ;; 時、truncation の事実 (:kuro/truncated? と :kuro/dropped-bytes) が
+  ;; checkpoint → restore → receipt まで生き残らねばならない。落ちた実行が
+  ;; 「成功した短い出力」の顔をして台帳に載る regression をここで止める。
+  ;; なお stream 層の cap は chunk 単位 (部分保持はしない): room を超えた
+  ;; chunk は本文ごと捨てられ、捨てたバイト数だけが残る。
+  (let [st (-> (stream/open (sess) (cmd) {:max-output-bytes 4})
+               (stream/append-chunk {:stream :stdout :text "abcd"})
+               (stream/append-chunk {:stream :stdout :text "efghij"}))
+        back (cp/restore (cp/->edn st))]
+    (testing "the restore itself carries the stream's truncation"
+      (is (true? (:kuro/truncated? back)))
+      (is (= 6 (:kuro/dropped-bytes back)))
+      (is (= 4 (:kuro/stdout-bytes back))))
+    (testing "and the abandoned receipt repeats it, not a clean exit 129"
+      (let [r (cp/abandon back)]
+        (is (= 129 (:kuro/exit-code r)))
+        (is (true? (:kuro/truncated? r)))
+        (is (= 6 (:kuro/dropped-bytes r)))
+        (is (= "abcd" (:kuro/stdout r)) "only the kept body, never the dropped tail")))
+    (testing "an untruncated orphan's receipt stays untruncated"
+      (let [clean (cp/abandon (cp/restore (cp/->edn (running-stream))))]
+        (is (not (contains? clean :kuro/truncated?)))
+        (is (not (contains? clean :kuro/dropped-bytes)))))))
+
 (deftest cap-spans-chunks
   (let [st (-> (stream/open (sess) (cmd))
                (stream/append-chunk {:stream :stdout :text "aaaa"})
