@@ -77,6 +77,30 @@
                                    (sup/kill! s "build")
                                    (done)))})))))
 
+(deftest kill-on-a-restored-session-closes-without-a-receipt
+  (testing "restored (handle-less) session: kill! marks the stream finished and
+            stores no receipt — a dead process has no host-measured exit values,
+            so no receipt is invented (sup/kill! docstring)"
+    (async done
+      (let [live (sup/new-supervisor)
+            s2 (sup/new-supervisor)
+            once (atom false)]
+        (sup/start! live "build" (safe)
+                    (emit "process.stdout.write('x'); setInterval(()=>{},1000)")
+                    {:repo-root "."
+                     :on-chunk (fn [_ _]
+                                 (when-not @once
+                                   (reset! once true)
+                                   (sup/restore! s2 (sup/snapshot live))
+                                   (is (= {"build" :orphaned} (sup/session-states s2)))
+                                   (sup/kill! s2 "build")
+                                   (is (= {"build" :exited} (sup/session-states s2))
+                                       "kill! on a restored session marks it finished")
+                                   (is (nil? (sup/receipt-of s2 "build"))
+                                       "no receipt is fabricated for a process this host never ran")
+                                   (sup/kill! live "build")
+                                   (done)))})))))
+
 (deftest denial-registers-nothing
   (let [s (sup/new-supervisor)
         out (sup/start! s "x"
