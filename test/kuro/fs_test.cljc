@@ -86,6 +86,48 @@
       (let [[_ removed2] (fs/rm st "only-one-segment")]
         (is (not removed2))))))
 
+(deftest every-documented-denial-reason-is-pinned
+  ;; kuro.fs の各 path op が返す :kuro.fs/reason は、README の「Denied work
+  ;; … produces recorded receipts」が指す契約の実体。reason 名は receipt を
+  ;; 読む側が分岐する語なので、黙って変わると消費者側が静かに壊れる ——
+  ;; 片付けずに pin する。
+  (let [blocks (atom {})
+        st (fs/store)]
+    (testing "write: writing over a directory is :is-a-directory"
+      (let [[st1] (fs/mkdir st "d")
+            [st2] (fs/write st1 "d" some-bytes (fake-put blocks))]
+        (is (= :is-a-directory (:kuro.fs/reason (last (fs/receipts st2)))))))
+    (testing "write: non-byte payload is :bytes-required, not an exception"
+      (let [[st' bytes] (fs/write st "x.txt" "not bytes" (fake-put blocks))]
+        (is (nil? bytes))
+        (is (= :bytes-required (:kuro.fs/reason (last (fs/receipts st')))))))
+    (testing "read: reading a directory is :not-a-file"
+      (let [[st1] (fs/mkdir st "dd")
+            [st2 bytes] (fs/read-file st1 "dd" (fake-get blocks))]
+        (is (nil? bytes))
+        (is (= :not-a-file (:kuro.fs/reason (last (fs/receipts st2)))))))
+    (testing "read: a recorded file whose block the host lost is :block-missing"
+      (let [[st1] (fs/write st "g.txt" some-bytes (fake-put blocks))
+            [st2 bytes] (fs/read-file st1 "g.txt" (fn [_cid] nil))]
+        (is (nil? bytes))
+        (let [r (last (fs/receipts st2))]
+          (is (= :block-missing (:kuro.fs/reason r)))
+          (is (string? (:kuro.fs/cid r)) "the receipt names the block that is gone"))))
+    (testing "ls: listing a file is :not-a-directory"
+      (let [[st1] (fs/write st "f.txt" some-bytes (fake-put blocks))
+            [st2 entries] (fs/ls st1 "f.txt")]
+        (is (nil? entries))
+        (is (= :not-a-directory (:kuro.fs/reason (last (fs/receipts st2)))))))
+    (testing "write/mkdir through a file parent is :path-blocked"
+      (let [[st1] (fs/write st "blocker" some-bytes (fake-put blocks))
+            [st2 cid] (fs/write st1 "blocker/child.txt" some-bytes (fake-put blocks))]
+        (is (nil? cid))
+        (is (= :path-blocked (:kuro.fs/reason (last (fs/receipts st2))))))
+      (let [[st1] (fs/write st "wall" some-bytes (fake-put blocks))
+            [st2 p] (fs/mkdir st1 "wall/d")]
+        (is (nil? p))
+        (is (= :path-blocked (:kuro.fs/reason (last (fs/receipts st2)))))))))
+
 (deftest rm-file-then-list
   (let [blocks (atom {})
         st (fs/store)
@@ -94,6 +136,25 @@
         [_ entries] (fs/ls st2 ".")]
     (is removed)
     (is (= [] entries))))
+
+(deftest rm-of-an-empty-directory-succeeds
+  (testing "README / fs/rm docstring: 'Remove a file or an empty directory' —
+            the empty-dir half of that contract had no test: a regression that
+            made rm refuse every directory would still have been green."
+    (let [st (fs/store)]
+      (testing "an empty dir is removed, recorded, and listed as gone"
+        (let [[st1] (fs/mkdir st "empty")
+              [st2 removed] (fs/rm st1 "empty")]
+          (is (true? removed))
+          (is (= :kuro.fs/receipt (:kuro.fs/type (last (fs/receipts st2)))))
+          (let [[_ entries] (fs/ls st2 ".")]
+            (is (= [] entries)))))
+      (testing "rm of the now-missing dir again is a not-found denial"
+        (let [[st1] (fs/mkdir st "d")
+              [st2] (fs/rm st1 "d")
+              [st3 removed] (fs/rm st2 "d")]
+          (is (not removed))
+          (is (= :not-found (:kuro.fs/reason (last (fs/receipts st3))))))))))
 
 (deftest receipts-list-both-accepted-and-denied
   (let [blocks (atom {})

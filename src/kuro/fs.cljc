@@ -151,7 +151,7 @@
                    :kuro.fs/op op
                    :kuro.fs/path (if (string? path) path (join-path path))
                    :kuro.fs/reason reason}
-                  (select-keys extra [:kuro.fs/missing]))]
+                  (select-keys extra [:kuro.fs/missing :kuro.fs/cid]))]
      [(record! st r) nil])))
 
 (defn- ok-receipt [op path extra]
