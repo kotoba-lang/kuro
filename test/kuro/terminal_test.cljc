@@ -209,3 +209,25 @@
     (let [ev {:kuro/type :kuro/note :kuro/note-text "hello"}
           sess' (t/append-event (t/session "s1" "cid:repo" :terminal-repo) ev)]
       (is (= ev (peek (:kuro/events sess')))))))
+
+(deftest capabilities-are-an-intent-record-not-a-kernel
+  ;; README not-enforce table: "A capability set is an intent record, not a
+  ;; kernel. ... A command granted only `repo/read` can still write to disk."
+  ;; The model-side half of that claim is that `t/command` / the gate never
+  ;; inspect argv contents against capabilities. Adding argv inspection would
+  ;; claim a confinement this repo does not have (the CLAUDE.md line: the mode
+  ;; is a grant scope, not an isolation level). Pin that the gate looks at
+  ;; capabilities only.
+  (testing "an argv naming a destructive binary is allowed under a read-only grant"
+    ;; the gate does not look at the argv; not stopping it is the documented
+    ;; honest behavior, not a bug
+    (let [sess (t/session "s1" "cid:repo" :terminal-repo)]
+      (is (true? (t/command-allowed? sess ["repo/read"]))
+          "capabilities only — argv is not consulted")
+      (is (nil? (t/denial sess ["repo/read"]))
+          "no denial: the gate takes capabilities only — no command argument at all")))
+  (testing "denial is decided by capabilities alone; argv content is irrelevant"
+    (let [sess (t/session "s1" "cid:repo" :terminal-repo)]
+      (is (= ["repo/write"]
+             (:kuro/missing (t/denial sess ["repo/write"])))
+          "denial keys off capabilities, not the command"))))
