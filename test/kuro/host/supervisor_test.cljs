@@ -77,6 +77,37 @@
                                    (sup/kill! s "build")
                                    (done)))})))))
 
+(deftest snapshot-mid-run-freezes-a-prefix-the-live-run-keeps-going
+  (testing "snapshot taken between chunks: the restored registry is frozen at
+            the prefix received so far (no loss, no duplication), while the
+            live registry keeps receiving and finishes with a receipt.
+            sup/start!'s chunk wrapper updates the registry copy BEFORE the
+            caller's on-chunk runs, so a snapshot taken inside on-chunk must
+            already contain that chunk."
+    (async done
+      (let [live (sup/new-supervisor)
+            s2 (sup/new-supervisor)
+            seen (atom 0)]
+        (sup/start! live "build" (safe)
+                    (emit "process.stdout.write('a\\n'); setTimeout(()=>process.stdout.write('b\\n'),30); setTimeout(()=>process.exit(0),90)")
+                    {:repo-root "."
+                     :on-chunk (fn [_ _]
+                                 (when (= 1 (swap! seen inc))
+                                   (sup/restore! s2 (sup/snapshot live))))
+                     :on-exit (fn [r]
+                                (is (= 0 (:kuro/exit-code r)))
+                                (testing "live run finishes normally"
+                                  (is (= {"build" :exited} (sup/session-states live)))
+                                  (is (= "a\nb\n" (:kuro/stdout (sup/receipt-of live "build")))))
+                                (testing "restored copy is frozen at the prefix"
+                                  (is (= {"build" :orphaned} (sup/session-states s2)))
+                                  (is (nil? (sup/receipt-of s2 "build"))
+                                      "the restored host never ran the process")
+                                  (is (= ["a\n"] (map :text (sup/read-window s2 "build"))))
+                                  (is (empty? (sup/read-window s2 "build"))
+                                      "the later chunk and exit never leak into the frozen copy"))
+                                (done))})))))
+
 (deftest kill-on-a-restored-session-closes-without-a-receipt
   (testing "restored (handle-less) session: kill! marks the stream finished and
             stores no receipt — a dead process has no host-measured exit values,
