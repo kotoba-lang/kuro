@@ -176,8 +176,10 @@ Command output is not plain text. `kuro.ansi` turns it into styled lines.
 Handled: SGR (bold/dim/italic/underline/inverse/strike, 8 + bright + 256 +
 truecolor, resets), `\r` in-line overwrite, `\b`, tab expansion, and `CSI K`
 erase — which is what actually collapses a progress bar (a bare `\r` leaves
-the tail, on a real tty too). Everything else — cursor addressing, scroll
-regions, alternate screen — is **discarded**, never printed.
+the tail, on a real tty too). OSC 8 hyperlinks drop the URI and the sequence
+but keep the linked words — a hyperlink wraps visible text, and losing the
+words would make the log lie. Everything else — cursor addressing, scroll
+regions, alternate screen, window-title OSC — is **discarded**, never printed.
 
 ### Not a PTY
 

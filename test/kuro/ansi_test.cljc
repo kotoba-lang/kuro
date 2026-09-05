@@ -14,6 +14,29 @@
     (is (= "ab" (ansi/plain (str "a" e "]0;title\u0007b"))))   ; OSC + BEL
     (is (= "ab" (ansi/plain (str "a" e "(Bb"))))))         ; charset select
 
+(deftest osc-8-hyperlink-drops-only-the-uri
+  (testing "OSC 8 opener/closer: the URI and the sequence are discarded, the
+            linked words stay. A hyperlink wraps visible text -- dropping the
+            words with the URI would make the log lie (what the operator sees
+            must match what the command printed)."
+    ;; opener(URI discarded) label closer label
+    (is (= "clickhere"
+           (ansi/plain (str e "]8;;https://example.com" e "\\"
+                            "click" e "]8;;" e "\\" "here")))))
+  (testing "the label text keeps its SGR style across the sequences"
+    (is (= [{:text "click" :style {:fg "green"}}]
+           (ansi/spans (str e "]8;;https://example.com" e "\\"
+                            e "[32mclick" e "]8;;" e "\\")))))
+  (testing "BEL-terminated OSC 8 (some emitters use BEL instead of ST)"
+    (is (= "click"
+           (ansi/plain (str e "]8;;https://example.com\u0007click" e "]8;;\u0007")))))
+  (testing "a truncated OSC 8 with no terminator discards to EOF -- and must
+            not leak the URI as text"
+    (is (= "before"
+           (ansi/plain (str "before" e "]8;;https://example.com")))))
+  (testing "other OSC payloads (window title) never reach the text"
+    (is (= "ab" (ansi/plain (str "a" e "]2;my title" e "\\" "b"))))))
+
 (deftest private-csi-and-scroll-regions-are-discarded
   (testing "README: 'cursor addressing, scroll regions, alternate screen — is
             discarded, never printed'. Private-mode CSI (the `?` prefix) is
