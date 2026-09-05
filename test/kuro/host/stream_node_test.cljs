@@ -71,6 +71,48 @@
                           (is (pos? (:kuro/dropped-bytes r)))
                           (done))})))
 
+(deftest slow-flood-truncation-counts-every-dropped-byte
+  ;; README enforce row "bounded output ... => exit 125, :kuro/truncated?".
+  ;; The existing fast-flood test pins that the cap *fires*, but its child
+  ;; blows past the cap in a single burst chunk - it never pins the
+  ;; multi-chunk shape a real build produces: many small chunks, the cap
+  ;; crossed mid-run, and the kill racing the pipe. `kuro.stream` drops
+  ;; chunk-wise (a chunk that does not fit whole is dropped whole), so the
+  ;; invariants the receipt must satisfy regardless of how the OS coalesces
+  ;; the writes are: kept <= cap, kept is a prefix of the emitted text, and
+  ;; kept + dropped is at least the cap - every byte the host actually READ
+  ;; is either kept or counted. Bytes still in the OS pipe when the cap
+  ;; fires are NOT counted: the provider SIGKILLs on truncation, so the
+  ;; tail is unread, not dropped - that gap is filed, not silently accepted
+  ;; (see issue "truncated streaming receipts undercount the unread tail").
+  (testing "a slow flood crossing the cap in many chunks: exit 125, kept <= cap, prefix, every read byte accounted"
+    (async done
+      (let [pattern "abcdefgh"
+            writes 10
+            emitted (* writes (count pattern))]
+        (sh/start (safe)
+                  (emit (str "let i=0;const t=setInterval(()=>{"
+                             "process.stdout.write('abcdefgh');"
+                             "if(++i===10){clearInterval(t);}},50)"))
+                  {:repo-root "." :max-output-bytes 16 :timeout-ms 10000
+                   :on-exit (fn [r]
+                              (is (= 125 (:kuro/exit-code r)))
+                              (is (true? (:kuro/truncated? r)))
+                              (is (<= (:kuro/stdout-bytes r) 16)
+                                  "the kept body never exceeds the cap")
+                              (is (>= (+ (:kuro/stdout-bytes r)
+                                         (:kuro/dropped-bytes r))
+                                      16)
+                                  "every byte the host read is kept or counted")
+                              (is (.startsWith (apply str (repeat writes pattern))
+                                               (:kuro/stdout r))
+                                  "what was kept is the emitted prefix, not a middle")
+                              (is (pos? (:kuro/dropped-bytes r)))
+                              (is (<= (+ (:kuro/stdout-bytes r)
+                                         (:kuro/dropped-bytes r))
+                                      emitted))
+                              (done))})))))
+
 (deftest denial-happens-before-spawn
   (let [out (sh/start (t/session "s1" "repo-cid" :terminal-repo
                                  {:kuro/grant {:capabilities #{}}})
