@@ -49,3 +49,39 @@
       (is (= minted (cid/sha256-raw-cid (js/Uint8Array. #js [104 101 108 108 111])))))
     (testing "differs for different bytes"
       (is (not= minted (cid/sha256-raw-cid (js/Uint8Array. #js [104 101 108 108 111 111])))))))
+
+;; README (kuro.host.opfs section): "`publish` verifies each block's bytes
+;; hash to its claimed CID before counting it published." The check itself
+;; lives in the Worker dispatch (opfs_worker.js), which Node cannot run — so
+;; this test pins the gate's ALGORITHM: the same comparison the Worker makes
+;; (`mintCid(bytes) === cid`), expressed against the `kuro.host.cid`
+;; reference mint. (1) a consistent cids/bytesByCid pair passes, (2) a pair
+;; whose claimed CID belongs to different bytes fails. The browser E2E
+;; (verify_opfs_browser.cljs :publishMismatchRefused) confirms the Worker
+;; enforces it; this test keeps the contract visible on Node so a math drift
+;; fails here without waiting for the E2E — same reasoning as cid-mint-parity.
+(deftest publish-verifies-bytes-hash-to-their-claimed-cid
+  (let [hello (js/Uint8Array. #js [104 101 108 108 111])  ; "hello"
+        world (js/Uint8Array. #js [119 111 114 108 100])  ; "world"
+        hello-cid (cid/sha256-raw-cid hello)
+        world-cid (cid/sha256-raw-cid world)
+        verify (fn [cids bytes-by-cid]
+                 ;; the Worker's gate: every claimed cid must be present in
+                 ;; bytesByCid AND hash to itself from the supplied bytes.
+                 (every? (fn [c]
+                           (let [b (get bytes-by-cid c)]
+                             (and b (= c (cid/sha256-raw-cid b)))))
+                         cids))]
+    (testing "a consistent cids/bytesByCid pair passes the gate"
+      (is (verify [hello-cid world-cid] {hello-cid hello world-cid world})))
+    (testing "bytes that hash to a different CID are refused, not counted"
+      (is (not (verify [hello-cid] {hello-cid world}))
+          "claimed CID is hello's, bytes are world's — the gate must reject this pair"))
+    (testing "a CID with no bytes supplied does not pass the gate"
+      (is (not (verify [world-cid] {})))
+      (is (not (verify [world-cid] {world-cid nil}))))
+    (testing "the gate is byte-addressed: one flipped byte invalidates the pair"
+      (let [tampered (js/Uint8Array. (aclone hello))]
+        (aset tampered 0 72) ; "h" -> "H"
+        (is (not= (cid/sha256-raw-cid tampered) hello-cid))
+        (is (not (verify [hello-cid] {hello-cid tampered})))))))
