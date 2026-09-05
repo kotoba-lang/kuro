@@ -1,9 +1,21 @@
 <!doctype html>
-<html><head><script src='/js/fs-cap.js'></script></head>
-<body><script type='module'>
+<html><body><script type='module'>
 window.addEventListener('error', (e) => { window.__failed = 'top: ' + e.message; });
 window.addEventListener('unhandledrejection', (e) => { window.__failed = 'rej: ' + (e.reason && e.reason.message || String(e.reason)); });
-// drive the integration scenario through the compiled kuro.fs + guest
-window.fsCapE2E().then((r) => { window.__capResults = r; window.__done = true; })
-                 .catch((e) => { window.__failed = 'cap: ' + (e && e.message || String(e)); });
+const worker = new Worker('./kuro-stream-worker.js');
+worker.onerror = (e) => { window.__failed = 'worker: ' + (e.message || 'error'); };
+const events = [];
+let done = false;
+worker.onmessage = (ev) => {
+  const m = ev.data;
+  events.push(m);
+  if (m['kuro.stream/type'] === 'exit') done = true;
+};
+worker.postMessage({
+  'kuro.stream/type': 'request',
+  'kuro.stream/op': 'start',
+  'kuro.stream/started-at': Date.now(),
+  'kuro.stream/payload': {guest: './stream-worker-guest.wasm', args: [40, 2]},
+});
+window.__drain = () => JSON.stringify({events: events, done: done, failed: window.__failed || null});
 </script></body></html>
