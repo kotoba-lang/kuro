@@ -133,3 +133,30 @@
     (is (contains? t/terminal-modes :terminal-repo))
     (is (not (contains? t/terminal-modes :terminal-safe)))
     (is (= "repo" (:kuro/label (t/terminal-modes :terminal-repo))))))
+
+(deftest command-rejects-non-argv-shapes
+  ;; README enforce row "no shell interpolation — argv vector, `:shell false`":
+  ;; the model-side half of that row is that `t/command` only ever builds an
+  ;; argv vector. A string command, a nil element, a blank element, or an empty
+  ;; vector must be refused at construction — not at spawn time, where the
+  ;; refusal depends on which host is wired in. Every host (sync, streaming)
+  ;; then inherits the guarantee instead of re-implementing it.
+  (testing "a bare string is the shell-interpolation shape and is refused"
+    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+                 (t/command "npm test"))))
+  (testing "empty and blank elements are refused (they would vanish or break argv)"
+    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+                 (t/command ["npm" ""])))
+    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+                 (t/command ["npm" " "]))))
+  (testing "nil elements and empty vectors are refused"
+    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+                 (t/command ["npm" nil])))
+    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+                 (t/command []))))
+  (testing "what is accepted is exactly the declared shape: kuro/argv vector of strings"
+    (let [c (t/command ["clojure" "-M:test"])]
+      (is (= :kuro/command (:kuro/type c)))
+      (is (= ["clojure" "-M:test"] (:kuro/argv c)))
+      (is (vector? (:kuro/argv c)))
+      (is (every? string? (:kuro/argv c))))))
