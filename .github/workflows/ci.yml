@@ -36,3 +36,42 @@ jobs:
       # cljs-broken for a day because nothing ran the portable code on the
       # runtime the consumers actually use.
       - run: npm run test:parity
+
+  # The browser E2Es (README "Verified end-to-end") ran only on developer
+  # machines: shadow-cljs compile + Playwright + wasm-tools were all
+  # local-machine steps with no CI job. The guarantees they check — a real
+  # OPFS round-trip, a guest fs_read gated by the grant, a real WASM guest
+  # streaming into kuro.stream — degrade silently without a gate, which is
+  # exactly the failure mode test:parity exists to prevent for the
+  # portable model. Same rule: a claim nobody runs is not a claim.
+  browser-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: DeLaGuardo/setup-clojure@13.4
+        with:
+          cli: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install
+      - name: Install wasm-tools
+        run: |
+          curl -fsSL https://github.com/bytecodealliance/wasm-tools/releases/download/v1.243.0/wasm-tools-1.243.0-x86_64-linux.tar.gz -o /tmp/wasm-tools.tar.gz
+          tar -xzf /tmp/wasm-tools.tar.gz -C /tmp
+          sudo install /tmp/wasm-tools-1.243.0-x86_64-linux/wasm-tools /usr/local/bin/wasm-tools
+          wasm-tools --version
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Compile the browser build
+        run: npx shadow-cljs compile fs-browser
+      - name: OPFS round-trip E2E
+        run: npx nbb -cp test/browser test/browser/verify_opfs_browser.cljs
+      - name: Guest fs capability E2E
+        run: npx nbb -cp test/browser test/browser/verify_guest_fs_cap.cljs
+      - name: Stream browser E2E
+        run: npx nbb -cp test/browser test/browser/verify_stream_browser.cljs
