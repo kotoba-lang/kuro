@@ -216,6 +216,7 @@
       (let [[st' cid] (fs/write (fs/store) "ok.txt" some-bytes (fake-put blocks))]
         (is (string? cid))
         (is (every? #(= :kuro.fs/receipt (:kuro.fs/type %)) (fs/receipts st')))))))
+
 (deftest fs-receipts-are-fixed-shape-and-namespaced
   ;; ns docstring "Receipts are fixed-shape, namespaced": "Mirroring
   ;; `kuro.terminal/receipt`: host- or caller-supplied extras are dropped,
@@ -247,3 +248,30 @@
                 :kuro.fs/missing "fs/write"}
                r))
         (is (every? #(= "kuro.fs" (namespace %)) (keys r)))))))
+
+(deftest no-path-op-requires-fs-publish
+  ;; op-capabilities docstring: "`publish` is a host-side op (the block
+  ;; store's), not a path op, so no path fn requires it." Unpinned, the claim
+  ;; erodes silently: a new path op mapped to "fs/publish" would make every
+  ;; narrowed-grant store lose that op while every suite stays green. A
+  ;; store granted everything EXCEPT fs/publish must still be able to do
+  ;; all five path ops -- publish lives entirely on the host side of the seam.
+  (let [blocks (atom {})
+        st (fs/with-grant (fs/store "bafyrei-root")
+                          #{"fs/read" "fs/write" "fs/ls" "fs/rm"})]
+    (testing "the vocabulary still names fs/publish"
+      (is (contains? fs/default-capabilities "fs/publish")))
+    (testing "no op maps to fs/publish in op-capabilities"
+      (is (not-any? #(= "fs/publish" %) (vals fs/op-capabilities))))
+    (testing "a grant without fs/publish can still do every path op"
+      (let [[st1 cid] (fs/write st "a.txt" some-bytes (fake-put blocks))
+            [st2 bytes] (fs/read-file st1 "a.txt" (fake-get blocks))
+            [st3 entries] (fs/ls st2 ".")
+            [st4] (fs/mkdir st3 "d")
+            [st5] (fs/rm st4 "a.txt")]
+        (is (string? cid))
+        (is (some? bytes))
+        (is (vector? entries))
+        (is (= :kuro.fs/receipt (:kuro.fs/type (last (fs/receipts st4)))))
+        (is (not-any? #(= :kuro.fs/denied (:kuro.fs/type %)) (fs/receipts st5))
+            "no op along the way was denied for want of fs/publish")))))
