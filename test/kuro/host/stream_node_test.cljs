@@ -152,6 +152,19 @@
                (sh/start (t/session "s1" "repo-cid" :terminal-repo {:kuro/cwd ".."})
                          (emit "0") {:repo-root "."}))))
 
+(deftest stream-cwd-sibling-prefix-is-outside-too
+  ;; README enforce row 'cwd confinement: resolved path must stay under the
+  ;; session's repo root'. The sync path pins confine's prefix-sibling case
+  ;; directly (node_test: "a sibling that merely shares a name prefix is
+  ;; outside") and the streaming path goes through the same confine, but only
+  ;; the (cwd "..") shape was pinned here. A cwd that resolves to a sibling
+  ;; sharing the repo-root's name prefix must be refused by resolution, not
+  ;; by spotting "..", on this path too.
+  (is (thrown? ExceptionInfo
+               (sh/start (t/session "s1" "repo-cid" :terminal-repo
+                                    {:kuro/cwd "/repo-evil"})
+                         (emit "0") {:repo-root "/repo"}))))
+
 (deftest stream-receipt-never-omits-isolation
   (testing "README: every receipt carries :kuro/isolation, defaulting to :none —
             a receipt that omits it would be read as though it had been isolated.
