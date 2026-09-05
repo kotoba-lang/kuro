@@ -216,3 +216,34 @@
       (let [[st' cid] (fs/write (fs/store) "ok.txt" some-bytes (fake-put blocks))]
         (is (string? cid))
         (is (every? #(= :kuro.fs/receipt (:kuro.fs/type %)) (fs/receipts st')))))))
+(deftest fs-receipts-are-fixed-shape-and-namespaced
+  ;; ns docstring "Receipts are fixed-shape, namespaced": "Mirroring
+  ;; `kuro.terminal/receipt`: host- or caller-supplied extras are dropped,
+  ;; everything lands in `:kuro.fs/*`." kuro.terminal pins its half of that
+  ;; mirror with receipt-drops-undeclared-result-keys; the fs side had no
+  ;; test. If a receipt could grow ad-hoc keys, a reader would have to
+  ;; handle fields one store produces and another never does — the exact
+  ;; problem kuro.terminal's select-keys discipline exists to prevent.
+  (let [blocks (atom {})]
+    (testing "an accepted write receipt is exactly the declared shape"
+      (let [[st' cid] (fs/write (fs/store) "ok.txt" some-bytes (fake-put blocks))
+            r (last (fs/receipts st'))]
+        (is (= {:kuro.fs/type :kuro.fs/receipt
+                :kuro.fs/op :write
+                :kuro.fs/path "ok.txt"
+                :kuro.fs/cid cid
+                :kuro.fs/size 2}
+               r)
+            "no extra key, none missing — the shape is closed")
+        (is (every? #(= "kuro.fs" (namespace %)) (keys r))
+            "every key is in the :kuro.fs namespace")))
+    (testing "a denial receipt is the same shape plus reason/missing, nothing else"
+      (let [[st' cid] (fs/write (fs/with-grant (fs/store) #{}) "no.txt" some-bytes (fake-put blocks))
+            r (last (fs/receipts st'))]
+        (is (= {:kuro.fs/type :kuro.fs/denied
+                :kuro.fs/op :write
+                :kuro.fs/path "no.txt"
+                :kuro.fs/reason :missing-capability
+                :kuro.fs/missing "fs/write"}
+               r))
+        (is (every? #(= "kuro.fs" (namespace %)) (keys r)))))))
