@@ -37,6 +37,31 @@
   (is (contains? opfs/ops :publish))
   (is (not (contains? opfs/ops :exec)) "no escape hatch: this store moves blocks, nothing else"))
 
+;; The vocabulary was pinned put/get/publish only, so removing :delete,
+;; :stats, or :drop-cache from `opfs/ops` (or from the Worker's dispatch)
+;; would have failed nothing here even though the Worker implements them and
+;; the wire contract declares them. Pin the whole declared vocabulary so a
+;; silently dropped op is a red test, not a main-thread hang waiting for a
+;; reply the Worker no longer sends. The filesystem EFFECTS live in the
+;; Worker (browser-only, sync access handles) — those stay with the E2E.
+(deftest declared-vocabulary-covers-every-op-the-worker-implements
+  (testing "opfs_worker.js dispatch implements exactly these six ops"
+    (is (= #{:put :get :delete :publish :stats :drop-cache} opfs/ops)))
+  (doseq [op [:delete :stats :drop-cache]]
+    (testing (str op " is a first-class op: valid request shape, reply shape pinned")
+      (let [payload (case op
+                      :delete {:cid "bafk-x"}
+                      :stats {}
+                      :drop-cache {})]
+        (is (opfs/valid-request? (opfs/request 1 op payload)))
+        (let [r (opfs/reply 1 op (case op
+                                   :delete {:ok true}
+                                   :stats {:count 0 :bytes 0}
+                                   :drop-cache {:ok true})
+                            nil)]
+          (is (nil? (:kuro.opfs/error r)))
+          (is (map? (:kuro.opfs/result r))))))))
+
 ;; CID parity: node:crypto mint vs the algorithm the Worker runs on
 ;; WebCrypto. Same algorithm, two runtimes — if these diverge, the cache and
 ;; the gateway disagree about what a block IS.
