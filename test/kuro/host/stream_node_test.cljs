@@ -1,7 +1,8 @@
 (ns kuro.host.stream-node-test
   "async テスト。`cljs.test` の `async` を使い、コールバックが呼ばれたことを
   必ず確認する —— 呼ばれなければタイムアウトで落ちる（黙って通らない）。"
-  (:require [clojure.string :as str]
+  (:require [clojure.set :as set]
+            [clojure.string :as str]
             [cljs.test :refer [deftest is testing async]]
             [kuro.host.cid :as cid]
             [kuro.host.stream-node :as sh]
@@ -126,6 +127,25 @@
                  :on-exit (fn [r]
                             (is (= "undefined" (:kuro/stdout r)))
                             (done))}))))
+
+(deftest stream-env-is-the-declared-manifest
+  ;; README "The same guarantees apply" - declared environment. The sync
+  ;; provider (node_test) pins the child env to the manifest plus only the OS
+  ;; injection; the streaming path only checked a single marker. Pin the
+  ;; full-manifest assertion here too so streaming cannot quietly widen it.
+  (async done
+    (sh/start (safe)
+              (emit "process.stdout.write(Object.keys(process.env).sort().join(','))")
+              {:repo-root "."
+               :on-exit (fn [r]
+                          (let [keys (set (str/split (:kuro/stdout r) #","))]
+                            (is (= #{"LANG" "PATH" "TERM"}
+                                   (set/intersection keys #{"LANG" "PATH" "TERM"})))
+                            (is (empty? (set/difference
+                                         keys
+                                         #{"LANG" "PATH" "TERM" "__CF_USER_TEXT_ENCODING"}))
+                                "anything else in the child env is a leak"))
+                          (done))})))
 
 (deftest stream-cwd-escape-throws
   (is (thrown? ExceptionInfo
