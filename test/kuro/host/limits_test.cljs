@@ -4,8 +4,9 @@
   contract a caller reads — a silent change makes the table lie. The existing
   deadline/output-cap tests only exercise explicitly-passed values, so this
   suite pins the defaults themselves and is shared by both Node providers."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is testing async]]
             [kuro.host.node :as node]
+            [kuro.host.stream-node :as sh]
             [kuro.stream :as stream]
             [kuro.terminal :as t]))
 
@@ -22,6 +23,30 @@
             its output cap comes from `kuro.stream`"
     (is (= 120000 (node/default-timeout-ms)))
     (is (= stream/default-max-output-bytes (node/default-max-output-bytes)))))
+
+(deftest streaming-provider-shares-the-timeout-default
+  ;; README table: "bounded time | :timeout-ms, default 120 s". The sync
+  ;; provider's default is pinned above via node/default-timeout-ms; the
+  ;; streaming provider had its own inline literal with no referenceable
+  ;; name, so nothing kept the two from drifting — a streaming run could
+  ;; have died at 30 s or never while the table still said 120 s. Pin both
+  ;; halves: the value is named and exported, and a streaming command with
+  ;; no explicit :timeout-ms is actually killed at it.
+  (testing "the default is a named value equal to the table and to the sync provider"
+    (is (= 120000 sh/default-timeout-ms))
+    (is (= (node/default-timeout-ms) sh/default-timeout-ms)))
+  (testing "a streaming command with no explicit :timeout-ms is killed at the default"
+    ;; a sleeping child, no timeout passed: the default must end it. 130000 ms
+    ;; > 120000 default — if the default regressed upward, the child would
+    ;; outlive this timeout and the test would fail on its own deadline.
+    (async done
+      (sh/start (t/session "s" "cid:repo" :terminal-repo)
+                (t/command [(.-execPath js/process) "-e" "setInterval(()=>{},1000)"])
+                {:repo-root "."
+                 :on-exit (fn [r]
+                            (is (= 124 (:kuro/exit-code r)))
+                            (is (true? (:kuro/timed-out? r)))
+                            (done))}))))
 
 (deftest stream-uses-the-same-output-default
   (testing "`kuro.stream` caps at 1 MiB unless told otherwise, so the cap the
