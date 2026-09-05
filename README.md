@@ -134,6 +134,15 @@ enforced across **both** streams together by `kuro.stream`, which also records
 how many bytes it dropped: a silently-cut receipt is indistinguishable from a
 short success.
 
+`dropped-bytes` counts **bytes the host actually read from the pipe and then
+discarded**. When the cap fires, the provider stops reading and kills the
+child, so bytes still sitting unread in the OS pipe are *not* counted: the sum
+`stdout-bytes + stderr-bytes + dropped-bytes` is a lower bound on what the
+child wrote, not an exact total. This is deliberate — kuro is a pipe, not a
+PTY, and the host cannot count what it never read. `kuro.stream` drops
+chunk-wise (a chunk that does not fit whole is dropped whole), so what is kept
+is always an exact prefix of the emitted output.
+
 ## Surviving the host — `kuro.checkpoint`
 
 A `kuro.stream` value lives only in memory: if the host dies, both *what was
