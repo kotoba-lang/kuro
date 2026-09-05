@@ -198,7 +198,21 @@
                                       "ok.txt" (fake-get blocks))]
         (is (some? bytes))
         (is (= :kuro.fs/receipt (:kuro.fs/type (last (fs/receipts st2)))))))
-    (testing "the default grant is the whole vocabulary — nothing changes for it"
+    (testing "the reverse leaf: fs/write does not imply fs/read"
+      ;; README "Isolation, on the record": "fs/write implies nothing about
+      ;; fs/read (separate leaves)". The other direction (fs/read granted,
+      ;; fs/write denied) is pinned above; this is the direction an auditor
+      ;; worries about -- a writer that cannot read back what it wrote.
+      (let [w (fs/with-grant (fs/store "bafyrei-root") #{"fs/write"})
+            [st1 cid] (fs/write w "secret.txt" some-bytes (fake-put blocks))]
+        (is (string? cid) "the write itself succeeds")
+        (let [[st2 bytes] (fs/read-file st1 "secret.txt" (fake-get blocks))]
+          (is (nil? bytes))
+          (let [r (last (fs/receipts st2))]
+            (is (= :kuro.fs/denied (:kuro.fs/type r)))
+            (is (= :missing-capability (:kuro.fs/reason r)))
+            (is (= "fs/read" (:kuro.fs/missing r)))))))
+    (testing "the default grant is the whole vocabulary -- nothing changes for it"
       (let [[st' cid] (fs/write (fs/store) "ok.txt" some-bytes (fake-put blocks))]
         (is (string? cid))
         (is (every? #(= :kuro.fs/receipt (:kuro.fs/type %)) (fs/receipts st')))))))
