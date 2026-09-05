@@ -5,6 +5,8 @@
 
     - argv-style commands are DENIED with no worker created (the honest
       refusal — a browser has no processes)
+    - a command that is neither argv nor a guest spec is denied with
+      :guest-spec-required (the third refusal branch)
     - :terminal-host mode is refused
     - a guest invocation wires chunk -> kuro.stream, exit -> receipt with
       :kuro/isolation :browser-origin
@@ -58,6 +60,30 @@
       (is (= false (:kuro/allowed? result)))
       (is (= :argv-not-a-process (:kuro/reason result))))
     (testing "no worker was created"
+      (is (zero? @created)))))
+
+(deftest command-that-is-neither-argv-nor-guest-spec-is-denied
+  ;; README「Commands are guest invocation specs … argv vectors are denied
+  ;; with :argv-not-a-process」は argv を pin するが、argv でも guest spec でも
+  ;; 無い第 3 の形は `:guest-spec-required` の branch に落ちる。この branch に
+  ;; test が無いと、denial の語 (:kuro/reason) を黙って変えても誰も気づかない
+  ;; —— 呼び出し側が分岐する語なので pin する。worker は 1 個も作らない。
+  (let [created (atom 0)
+        start* (fn [cmd] (sb/start sess cmd
+                                   {:make-worker (fn [_] (swap! created inc) nil)}))]
+    (testing "a bare string command is refused as :guest-spec-required"
+      (let [r (start* "echo hi")]
+        (is (false? (:kuro/allowed? r)))
+        (is (= :guest-spec-required (:kuro/reason r)))))
+    (testing "nil is refused the same way"
+      (let [r (start* nil)]
+        (is (false? (:kuro/allowed? r)))
+        (is (= :guest-spec-required (:kuro/reason r)))))
+    (testing "a map with a guest but no export is not a guest spec"
+      (let [r (start* {:kuro.browser/guest "bafybei-component"})]
+        (is (false? (:kuro/allowed? r)))
+        (is (= :guest-spec-required (:kuro/reason r)))))
+    (testing "no worker was created for any of them"
       (is (zero? @created)))))
 
 (deftest terminal-host-mode-refused
