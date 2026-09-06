@@ -158,3 +158,27 @@
     (is (re-find #"npm test" s))
     (is (re-find #"running" s))
     (is (re-find #"\d+B" s))))
+
+
+(deftest summary-declares-checkpoint-truncation
+  ;; cp/summary の `(checkpoint dropped NB)` 接尾辞 (`when-let [d
+  ;; (:kuro.checkpoint/dropped-bytes cp)]`) は `->edn` に `:max-chunk-bytes` を
+  ;; 渡した (checkpoint 層で本文を切った) 時にだけ現れる branch。既存の
+  ;; summary-says-the-operational-facts は untruncated な stream だけを見るので、
+  ;; この接尾辞が消えたり壊れたりしても全 suite が緑のまま -- 「切った事実」が
+  ;; 運用者の最初の 1 行から消える regression をここで止める。
+  (let [s (cp/summary (cp/->edn (running-stream) {:max-chunk-bytes 4}))]
+    (is (re-find #"npm test" s))
+    (is (re-find #"\[running\]" s)
+        "base line is unchanged -- the suffix is an addition, not a replacement")
+    (is (re-find #"\(checkpoint dropped \d+B\)" s)))
+  (testing "the exact count: cp/->edn の cap は文字数 (count) で切る"
+    ;; running-stream = stdout "compiling…\n" (11 chars) + stderr "warn\n"
+    ;; (5 chars)。cap 4 → 最初の chunk から 7 文字切れて "comp" が残り、
+    ;; 2 つ目は丸ごと落ちる → 7 + 5 = 12。checkpoint 層は stream 層と違い
+    ;; byte でなく (count) 文字数で切る -- その事実ごと pin する。
+    (is (re-find #"\(checkpoint dropped 12B\)"
+                 (cp/summary (cp/->edn (running-stream) {:max-chunk-bytes 4})))))
+  (testing "the untruncated case has no suffix"
+    (is (not (re-find #"checkpoint dropped"
+                      (cp/summary (cp/->edn (running-stream))))))))
