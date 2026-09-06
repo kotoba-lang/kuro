@@ -36,6 +36,14 @@ jobs:
       # cljs-broken for a day because nothing ran the portable code on the
       # runtime the consumers actually use.
       - run: npm run test:parity
+      # The README claims the CID math is parity-locked against an independent
+      # Python mint (scripts/cid_mint.py). That claim must RUN, not be told:
+      # a mint no job executes is a claim nobody checks. This step proves
+      # python3 actually mints the pinned values; test:kuro.host.opfs/python-mint
+      # then proves the cljs mint and the Python mint agree on the same vectors.
+      - run: |
+          test "$(python3 scripts/cid_mint.py hello)" = "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44yegnrjhc4yeq"
+          test "$(python3 scripts/cid_mint.py world)" = "bafkreicin2sgejgrxnh3nahtj56jvwlkr4sozcf6opvi4wtmmuta5hfyu4"
 
   # The browser E2Es (README "Verified end-to-end") ran only on developer
   # machines: shadow-cljs compile + Playwright + wasm-tools were all

@@ -230,8 +230,10 @@ must not mean both refused and never asked.
 A dedicated Worker holds OPFS sync access handles (a Worker-only API) and
 speaks a closed op vocabulary (`put` / `get` / `delete` / `publish` /
 `stats` / `drop-cache`). CIDs are minted with WebCrypto sha-256 inside the
-Worker; the math is parity-locked with `kuro.host.cid` (node:crypto) and an
-independent Python mint. `publish` verifies each block's bytes hash to its
+Worker; the math is parity-locked with `kuro.host.cid` (node:crypto) and the
+independent Python mint at `scripts/cid_mint.py` (pinned by
+`test:kuro.host.opfs/python-mint-parity` and gated in CI — a mint nobody
+runs would be a claim nobody checks). `publish` verifies each block's bytes hash to its
 claimed CID before counting it. `delete` is **idempotent**: removing a cid
 that is not cached succeeds with `{removed: false}` (never an error), while a
 real failure (open handle, permission, quota) surfaces as a `:kuro.opfs/error`
