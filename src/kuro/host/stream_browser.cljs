@@ -145,9 +145,9 @@
                                               "kuro.stream/payload"    #js {"guest" (or
                                                                                     (:kuro.browser/guest cmd)
                                                                                     "")
-                                                                            "args"   (or
+                                                                            "args"   (clj->js (or
                                                                                       (:kuro.browser/args cmd)
-                                                                                      [])}}))]
+                                                                                      []))}}))]
                 {:stream st
                  :write (fn [text]
                           (when (stream/running? @st)

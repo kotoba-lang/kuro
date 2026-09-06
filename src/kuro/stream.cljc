@@ -37,7 +37,7 @@
    ログで 3 倍ずれる）。"
   [s]
   #?(:clj (alength (.getBytes ^String (str s) "UTF-8"))
-     :cljs (.-length (js/Buffer.from (str s) "utf8"))))
+     :cljs (.-length (.encode (js/TextEncoder.) (str s)))))
 
 (defn open
   "実行中の session を開く。opts: `:max-output-bytes`。"
