@@ -39,6 +39,31 @@
       (is (true? (:kuro/truncated? st)))
       (is (= 1 (:kuro/dropped-bytes st))))))
 
+(deftest a-chunk-that-partly-fits-is-dropped-whole
+  ;; README (stream): "kuro.stream drops chunk-wise (a chunk that does not fit
+  ;; whole is dropped whole), so what is kept is always an exact prefix of the
+  ;; emitted output." The two existing cap tests (output-cap-drops-body /
+  ;; cap-counts-both-streams) only exercise room=0 — a chunk arriving when the
+  ;; cap is already consumed. Neither pins the straddle: room > 0 but < next
+  ;; chunk. If the code split the straddling chunk at the boundary, kept text
+  ;; would fit under the cap yet NOT be an exact prefix of what the child
+  ;; wrote, and dropped-bytes would under-count the silently discarded tail.
+  ;; "Exact prefix" is the documented, stronger guarantee; pin it.
+  (testing "a chunk larger than the remaining room is dropped whole, not split"
+    (let [st (-> (stream/open (sess) (cmd) {:max-output-bytes 4})
+                 (stream/append-chunk {:stream :stdout :text "ab"})    ; 2B, room 2
+                 (stream/append-chunk {:stream :stdout :text "cdef"}))] ; 4B > room 2
+      (is (true? (:kuro/truncated? st)))
+      (is (= "ab" (stream/text-of st :stdout)) "the straddling chunk's body is gone entirely")
+      (is (= 4 (:kuro/dropped-bytes st)) "the WHOLE chunk size is counted, not the 2 that would have fit")
+      (is (= 2 (:kuro/stdout-bytes st)) "kept bytes stay the exact-prefix count"))
+    (testing "a later chunk that now fits exactly arrives after the drop"
+      (let [st (-> (stream/open (sess) (cmd) {:max-output-bytes 4})
+                   (stream/append-chunk {:stream :stdout :text "ab"})
+                   (stream/append-chunk {:stream :stdout :text "cdef"})
+                   (stream/append-chunk {:stream :stdout :text "gh"}))]
+        (is (= "abgh" (stream/text-of st :stdout)))))))
+
 (deftest finish-produces-an-ordinary-receipt
   (let [r (-> (stream/open (sess) (cmd))
               (stream/append-chunk {:stream :stdout :text "hi\n"})
