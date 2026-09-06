@@ -111,7 +111,7 @@ window.fsCapE2E().then((r) => { window.__capResults = r; window.__done = true; }
 (defn- -main []
   (-> (js/Promise.resolve
        (do (.mkdirSync fs tmp-dir #js {:recursive true})
-           (when-not (.existsSync fs (.join path tmp-dir "js" "fs-demo.js"))
+           (when-not (.existsSync fs (.join path tmp-dir "js" "fs-cap.js"))
              (throw (js/Error. "fs-cap.js not built — run: npx shadow-cljs compile fs-browser")))))
       (.then (fn [] (compile-guest!)))
       (.then (fn [wasm-path]
