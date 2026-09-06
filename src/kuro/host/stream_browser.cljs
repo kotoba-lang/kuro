@@ -98,30 +98,34 @@
                                             (:max-output-bytes opts)
                                             (assoc :max-output-bytes (:max-output-bytes opts)))))
                     exits (atom 0)
-                    ;; the wire: Worker replies with
-                    ;; {:kuro.browser/type :chunk :stream :stdout|:stderr :text "…"}
-                    ;; {:kuro.browser/type :exit  :exit-code n :started-at … :finished-at …}
+                    ;; the wire: stream_worker.js owns the protocol and is the real
+                    ;; execution boundary. It emits
+                    ;;   {"kuro.stream/type" "chunk", "kuro.stream/stream" "stdout|stderr",
+                    ;;    "kuro.stream/text" "…"}
+                    ;;   {"kuro.stream/type" "exit", "kuro.stream/exit-code" n,
+                    ;;    "kuro.stream/started-at" ms, "kuro.stream/finished-at" ms}
+                    ;; and receives request envelopes keyed by "kuro.stream/op"
+                    ;; (start | stdin | cancel). The wire uses plain string keys —
+                    ;; clj->js nests qualified keywords into objects, so a
+                    ;; :kuro.stream/type keyword sent from CLJS would arrive as
+                    ;; {kuro {stream {type ...}}}. Strings round-trip unchanged.
                     on-message (fn [ev]
-                                 ;; The wire uses plain string keys — clj->js nests
-                                 ;; namespaced keywords into objects, so a
-                                 ;; :kuro.browser/type keyword sent from CLJS would
-                                 ;; arrive as {kuro {browser {type ...}}}. Strings
-                                 ;; round-trip unchanged.
+                                 ;; (wire note absorbed into the header above)
                                  (let [m (js->clj (.-data ev))
-                                       type (get m "kuro.browser/type")]
+                                       type (get m "kuro.stream/type")]
                                    (condp = type
                                      "chunk"
-                                     (let [chunk {:stream (keyword (get m "stream"))
-                                                  :text (get m "text")}]
+                                     (let [chunk {:stream (keyword (get m "kuro.stream/stream"))
+                                                  :text (get m "kuro.stream/text")}]
                                        (swap! st stream/append-chunk chunk)
                                        (when-let [cb (:on-chunk opts)]
                                          (cb @st chunk)))
                                      "exit"
                                      (when (== 1 (swap! exits inc))
-                                       (let [result (cond-> {:exit-code (get m "exit-code" 0)
+                                       (let [result (cond-> {:exit-code (get m "kuro.stream/exit-code" 0)
                                                              :isolation :browser-origin}
-                                                      (get m "started-at") (assoc :started-at (get m "started-at"))
-                                                      (get m "finished-at") (assoc :finished-at (get m "finished-at")))
+                                                      (get m "kuro.stream/started-at") (assoc :started-at (get m "kuro.stream/started-at"))
+                                                      (get m "kuro.stream/finished-at") (assoc :finished-at (get m "kuro.stream/finished-at")))
                                              receipt (stream/finish @st result)]
                                          (reset! st receipt)
                                          (when-let [cb (:on-exit opts)]
@@ -129,15 +133,31 @@
                                      nil)))
                     worker ((:make-worker opts) worker-file)
                     add-l (.-addEventListener worker)
-                    _ (.call add-l worker "message" on-message)]
+                    _ (.call add-l worker "message" on-message)
+                    _ (let [pm (.-postMessage worker)]
+                        ;; The guest does not exist until the Worker receives a
+                        ;; start request. stream_worker.js instantiates the wasm
+                        ;; on op "start" — posting it is the host's job.
+                        (.call pm worker #js {"kuro.stream/type"        "request"
+                                              "kuro.stream/op"         "start"
+                                              "kuro.stream/started-at" (or (:now opts)
+                                                                           (js/Date.now))
+                                              "kuro.stream/payload"    #js {"guest" (or
+                                                                                    (:kuro.browser/guest cmd)
+                                                                                    "")
+                                                                            "args"   (or
+                                                                                      (:kuro.browser/args cmd)
+                                                                                      [])}}))]
                 {:stream st
                  :write (fn [text]
                           (when (stream/running? @st)
                             (let [pm (.-postMessage worker)]
-                              (.call pm worker #js {"kuro.browser/type" "stdin"
-                                                    "kuro.browser/text" text}))))
+                              (.call pm worker #js {"kuro.stream/type" "request"
+                                                    "kuro.stream/op"   "stdin"
+                                                    "kuro.stream/payload" #js {"text" text}}))))
                  :kill (fn []
                          (when (stream/running? @st)
                            (let [pm (.-postMessage worker)]
-                             (.call pm worker #js {"kuro.browser/type" "cancel"}))))
+                             (.call pm worker #js {"kuro.stream/type" "request"
+                                                   "kuro.stream/op"   "cancel"}))))
                  :worker worker}))))
