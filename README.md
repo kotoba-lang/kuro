@@ -272,8 +272,11 @@ nothing about fs/read (separate leaves).
   listing, and reading back byte-identical through the OPFS store
 - a guest reading a `kuro.fs`-written file through a gated `fs_read` import,
   with the un-granted capability refused
+- a real WASM guest running *inside a Worker* (not the page): the page only
+  postMessages a start request, and the guest's memory and i32 exit code cross
+  the worker boundary as a `kuro.stream` stdout chunk and an exit message
 
-See `test/browser/verify_*.cljs` and ADR-2609041240.
+See `test/browser/verify_*.cljs` (one file per entry above) and ADR-2609041240.
 
 ## Tests
 
