@@ -191,7 +191,20 @@
           "receipt keys are all :kuro/*"))))
 
 (deftest receipt-becomes-a-kotoba-fact
+  ;; `kuro.terminal/receipt-fact` is the seam where a terminal receipt leaves
+  ;; the kuro namespace for the kotoba fact store. CLAUDE.md rule 4 has the
+  ;; fact carrying the whole map -- a consumer that reaches for
+  ;; `(:kuro/receipt f)` is relying on the *embedding* itself, which no test
+  ;; pinned. The existing assertions covered only :kotoba/type and
+  ;; :kotoba/id; if the :kuro/receipt key were dropped, renamed, or replaced
+  ;; with a digest-only view, every CI job would stay green while kotoba read
+  ;; nil. Pin that the embedded map IS the source receipt -- same exact map,
+  ;; :kuro/* one-namespace intact.
   (let [r (host/run (safe-session) (emit "0") {:repo-root "."})
         f (t/receipt-fact r)]
     (is (= :kuro/terminal-receipt (:kotoba/type f)))
-    (is (= [:kuro/receipt "test" [node "-e" "0"]] (:kotoba/id f)))))
+    (is (= [:kuro/receipt "test" [node "-e" "0"]] (:kotoba/id f)))
+    (is (contains? f :kuro/receipt) "the receipt is embedded, not just referenced")
+    (is (= r (:kuro/receipt f)) "the embedded map is the exact source receipt")
+    (testing "the embedded receipt keeps the :kuro/* one-namespace shape"
+      (is (every? #(= "kuro" (namespace %)) (keys (:kuro/receipt f)))))))
