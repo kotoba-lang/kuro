@@ -75,3 +75,14 @@ jobs:
         run: npx nbb -cp test/browser test/browser/verify_guest_fs_cap.cljs
       - name: Stream browser E2E
         run: npx nbb -cp test/browser test/browser/verify_stream_browser.cljs
+      # The README "Verified end-to-end" list has five entries; each entry's
+      # proving test must run HERE. A verify_*.cljs that exists in test/browser
+      # but has no CI step is a claim nobody runs — the exact failure mode
+      # test:parity exists to prevent. The two below existed as runnable source
+      # with no gate: the fs-browser shadow-cljs build is compiled above, and
+      # wasm-tools is installed above, so both are gateable with no new
+      # machinery.
+      - name: kuro.fs in-browser E2E (fs-browser build)
+        run: npx nbb -cp test/browser test/browser/verify_fs_browser.cljs
+      - name: Stream Worker-convergence E2E (guest runs inside the Worker)
+        run: npx nbb -cp test/browser test/browser/verify_stream_worker.cljs
