@@ -119,6 +119,15 @@
                        ms))]
           (.on (.-stdout proc) "data" (take-chunk! :stdout))
           (.on (.-stderr proc) "data" (take-chunk! :stderr))
+          ;; 子の stdin に error リスナを張っておく。close-stdin (`.end`) のあとに
+          ;; `(:write …)` されると Node は stdin socket 上で
+          ;; ERR_STREAM_WRITE_AFTER_END の 'error' を**非同期で** emit する。
+          ;; 誰も listen していなければ unhandled 'error' -> 未捕捉例外で host
+          ;; （kobo サーバ）ごと落ちる（実測）。空のリスナが受けることで遅い write は
+          ;; 「黙って無視」に落ち着く —— write 1 回の失敗で host が死ぬのは、
+          ;; `on-chunk` の EventEmitter 例外と同じ類の壊れ方。
+          (when-let [stdin (.-stdin proc)]
+            (.on stdin "error" (fn [_] nil)))
           (.on proc "error"
                (fn [err]
                  (when timer (js/clearTimeout timer))
