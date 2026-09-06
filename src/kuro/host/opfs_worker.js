@@ -10,11 +10,11 @@
 //                                                          own fetch in v1 —
 //                                                          the Worker has no
 //                                                          credential scope)
-//   delete  {cid}                          -> {ok}
+//   delete  {cid}                          -> {removed}  (idempotent: not-cached is success)
 //   publish {cids: [..], bytesByCid: {..}} -> {published: n}  (explicit op —
 //                                                          never automatic)
 //   stats   {}                             -> {count, bytes}
-//   drop-cache {}                          -> {ok}
+//   drop-cache {}                          -> {removed: n} (partial failure is visible)
 //
 // Storage layout: one flat directory, file name = the CID string, file
 // content = the raw block bytes. Sync access handles keep get-block
@@ -101,14 +101,22 @@ async function getBlock(cid) {
 }
 
 async function deleteBlock(cid) {
+  // Contract (issue #54, settled): delete on a cid that is not cached is
+  // IDEMPOTENT SUCCESS — the cache is origin-scoped and custody is upstream,
+  // so "was never cached" and "already removed" are the same final state. It
+  // reports {removed: false}, not an error. A REAL failure (open handle,
+  // permission, quota) propagates as an error reply — never a bare ok:false.
   const dir = await getRoot();
+  const key = handleKey(cid);
   try {
-    await dir.removeEntry(handleKey(cid));
-    handles.delete(handleKey(cid));
-    return true;
+    await dir.getFileHandle(key, { create: false });
   } catch (e) {
-    return false;
+    handles.delete(key);
+    return { removed: false };
   }
+  await dir.removeEntry(key);
+  handles.delete(key);
+  return { removed: true };
 }
 
 async function stats() {
@@ -125,16 +133,26 @@ async function stats() {
 }
 
 async function dropCache() {
+  // Contract (issue #54, settled): drop-cache reports {removed: n} so a
+  // partial failure is visible. A removeEntry that throws midway leaves some
+  // blocks deleted; the reply must say how many went, not just a generic
+  // worker-error with null. The error propagates AFTER recording what was
+  // actually removed.
   const dir = await getRoot();
   const names = [];
   for await (const name of dir.keys()) {
     if (name.startsWith("blk-")) names.push(name);
   }
-  for (const n of names) {
-    await dir.removeEntry(n);
+  let removed = 0;
+  try {
+    for (const n of names) {
+      await dir.removeEntry(n);
+      removed += 1;
+    }
+  } finally {
+    handles.clear();
   }
-  handles.clear();
-  return true;
+  return { removed };
 }
 
 // --- request/reply dispatch ------------------------------------------------
@@ -157,7 +175,7 @@ async function dispatch(msg) {
       return { result: { bytes: bytes || null } };
     }
     case "delete": {
-      return { result: { ok: await deleteBlock(p.cid) } };
+      return { result: await deleteBlock(p.cid) };
     }
     case "publish": {
       // v1: the page passes blocks it already holds; the Worker verifies each
@@ -176,7 +194,7 @@ async function dispatch(msg) {
     case "stats":
       return { result: await stats() };
     case "drop-cache":
-      return { result: { ok: await dropCache() } };
+      return { result: await dropCache() };
     default:
       return { error: "unknown-op" };
   }
