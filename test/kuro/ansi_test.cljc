@@ -82,6 +82,21 @@
   (testing "CSI m with no parameters is a reset (ECMA-48: omitted parameter = 0)"
     (is (= [{:text "x" :style {}}] (ansi/spans (str e "[31m" e "[mx"))))))
 
+(deftest named-colour-matrix-is-complete
+  ;; README「SGR ... 8 + bright ...」の「8」は base-colors 全域を指す。既存の
+  ;; pin は fg green (32) / bg blue (44) / fg bright-red (91) の 3 セルだけで、
+  ;; bright-bg 全域 (100-107) と標準の残りは無 test —— named-color の one-off
+  ;; rename (black→blue など) や bright- 接頭辞の脱落はこの 3 セルでは検出
+  ;; できない (extended matrix が 256/truecolor の全セルで閉じたのと同じ理由)。
+  ;; apply-sgr は 30/40/90/100 の 4 分岐なので、4 象限 × 8 色を全部 pin する。
+  (let [named ["black" "red" "green" "yellow" "blue" "magenta" "cyan" "white"]]
+    (doseq [[offset mode] [[30 :fg] [40 :bg] [90 :fg] [100 :bg]]
+            [i c] (map-indexed vector named)]
+      (let [expected (if (< offset 90) c (str "bright-" c))]
+        (is (= {mode expected}
+               (ansi/apply-sgr {} [(+ offset i)]))
+            (str "named colour " (+ offset i) " -> " mode " " expected))))))
+
 (deftest text-attributes-and-their-own-resets
   ;; README「Handled」の SGR 属性行: dim/italic/underline/inverse/strike と、
   ;; それぞれの reset (22/23/24/27/29)。reset は同じ系列の属性だけを落とし、
