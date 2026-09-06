@@ -1,3 +1,5 @@
 .cpcache/
 node_modules/
 package-lock.json
+test/browser/.tmp/
+.shadow-cljs/
