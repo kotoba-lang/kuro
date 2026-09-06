@@ -120,6 +120,39 @@ results.missAfterDrop = got2['kuro.opfs/result']?.bytes === null;
 const bad = await call('publish', { cids: ['bafkrei-fake'], bytesByCid: { 'bafkrei-fake': bytes } });
 results.publishMismatchRefused = bad['kuro.opfs/error'] === 'cid-mismatch';
 
+// Issue #54 contract, pinned in a real browser:
+//  - delete of a cached cid: {removed: true}, no error
+//  - delete of a never-cached cid: IDEMPOTENT SUCCESS {removed: false}, no error
+//  - delete twice: second is {removed: false}
+//  - drop-cache reports {removed: n} matching the blocks that existed
+//  - after drop-cache, delete of a previously-cached cid is still {removed: false}
+// (the block for putCid was already removed by the drop-cache above — the
+// page re-puts the same bytes first; same cid, so this is the same block)
+await call('put', { bytes });
+const del = await call('delete', { cid: results.putCid });
+results.deleteCached = del['kuro.opfs/result']?.removed === true && del['kuro.opfs/error'] === null;
+
+const delMiss = await call('delete', { cid: 'bafkrei000000000000000000000000000000000000000000000000000000' });
+results.deleteMissIdempotent = delMiss['kuro.opfs/result']?.removed === false && delMiss['kuro.opfs/error'] === null;
+
+// re-put so delete-twice and drop-cache removed counts have known blocks
+const put2 = await call('put', { bytes });
+const cid2 = put2['kuro.opfs/result']?.cid;
+const put3 = await call('put', { bytes: new Uint8Array([119, 111, 114, 108, 100]) });
+const cid3 = put3['kuro.opfs/result']?.cid;
+const del1 = await call('delete', { cid: cid2 });
+results.deleteTwiceFirstTrue = del1['kuro.opfs/result']?.removed === true;
+const del2 = await call('delete', { cid: cid2 });
+results.deleteTwiceSecondFalse = del2['kuro.opfs/result']?.removed === false && del2['kuro.opfs/error'] === null;
+
+const drop = await call('drop-cache', {});
+// after the deletes above, exactly cid3's block remains
+results.dropReportsRemovedCount = drop['kuro.opfs/result']?.removed === 1 && drop['kuro.opfs/error'] === null;
+const st3 = await call('stats', {});
+results.statsAfterDropZero = st3['kuro.opfs/result']?.count === 0;
+const delAfterDrop = await call('delete', { cid: cid3 });
+results.deleteAfterDropIdempotent = delAfterDrop['kuro.opfs/result']?.removed === false;
+
 window.__results = results;
 </script></body></html>")
 
@@ -144,7 +177,14 @@ window.__results = results;
                               (= 1 (:statsAfterPut r))
                               (zero? (:statsAfterDrop r))
                               (:missAfterDrop r)
-                              (:publishMismatchRefused r))]
+                              (:publishMismatchRefused r)
+                              (:deleteCached r)
+                              (:deleteMissIdempotent r)
+                              (:deleteTwiceFirstTrue r)
+                              (:deleteTwiceSecondFalse r)
+                              (:dropReportsRemovedCount r)
+                              (:statsAfterDropZero r)
+                              (:deleteAfterDropIdempotent r))]
                  (report! {:opfs-e2e r})
                  (report! {:verdict (if ok? "PASS" "FAIL")})
                  (when-not ok? (set! (.-exitCode js/process) 1)))))

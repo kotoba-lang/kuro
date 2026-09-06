@@ -55,9 +55,9 @@
                       :drop-cache {})]
         (is (opfs/valid-request? (opfs/request 1 op payload)))
         (let [r (opfs/reply 1 op (case op
-                                   :delete {:ok true}
+                                   :delete {:removed true}
                                    :stats {:count 0 :bytes 0}
-                                   :drop-cache {:ok true})
+                                   :drop-cache {:removed 0})
                             nil)]
           (is (nil? (:kuro.opfs/error r)))
           (is (map? (:kuro.opfs/result r))))))))
@@ -110,3 +110,29 @@
         (aset tampered 0 72) ; "h" -> "H"
         (is (not= (cid/sha256-raw-cid tampered) hello-cid))
         (is (not (verify [hello-cid] {hello-cid tampered})))))))
+
+;; Issue #54 (settled in README + opfs_worker.js): the delete/drop-cache
+;; failure contract. Node cannot run the Worker, so these pin the CONTRACT
+;; shape the reply must carry — the browser E2E (verify_opfs_browser.cljs:
+;; deleteCached / deleteMissIdempotent / dropReportsRemovedCount) proves the
+;; Worker actually does it.
+(deftest delete-and-drop-cache-contract-shape
+  (testing "delete of a cached cid reports {removed true} with no error"
+    (let [r (opfs/reply 1 :delete {:removed true} nil)]
+      (is (= {:removed true} (:kuro.opfs/result r)))
+      (is (nil? (:kuro.opfs/error r)))))
+  (testing "delete of a NOT-cached cid is idempotent success: {removed false}, no error"
+    (let [r (opfs/reply 1 :delete {:removed false} nil)]
+      (is (= {:removed false} (:kuro.opfs/result r)))
+      (is (nil? (:kuro.opfs/error r)))))
+  (testing "a REAL delete failure carries :kuro.opfs/error — never a bare ok:false"
+    (let [r (opfs/reply 1 :delete nil :delete-failed)]
+      (is (nil? (:kuro.opfs/result r)))
+      (is (= :delete-failed (:kuro.opfs/error r)))))
+  (testing "drop-cache reports how many blocks were removed — partial state is visible"
+    (let [r (opfs/reply 1 :drop-cache {:removed 3} nil)]
+      (is (= {:removed 3} (:kuro.opfs/result r)))
+      (is (nil? (:kuro.opfs/error r))))
+    (let [partial (opfs/reply 2 :drop-cache nil :drop-cache-failed)]
+      (is (= :drop-cache-failed (:kuro.opfs/error partial)))
+      (is (nil? (:kuro.opfs/result partial))))))

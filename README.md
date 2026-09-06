@@ -232,7 +232,13 @@ speaks a closed op vocabulary (`put` / `get` / `delete` / `publish` /
 `stats` / `drop-cache`). CIDs are minted with WebCrypto sha-256 inside the
 Worker; the math is parity-locked with `kuro.host.cid` (node:crypto) and an
 independent Python mint. `publish` verifies each block's bytes hash to its
-claimed CID before counting it. OPFS is origin-scoped **cache** — durable
+claimed CID before counting it. `delete` is **idempotent**: removing a cid
+that is not cached succeeds with `{removed: false}` (never an error), while a
+real failure (open handle, permission, quota) surfaces as a `:kuro.opfs/error`
+reply — a bare `ok: false` that cannot distinguish "not cached" from "failed"
+is not the contract. `drop-cache` reports `{removed: n}` — a partial failure
+mid-removal is visible in the reply, not collapsed into a generic
+`worker-error` with no count. OPFS is origin-scoped **cache** — durable
 custody is kotobase (`PUT/GET kotobase.net/ipld/:cid`), and publish is an
 explicit op, never automatic.
 
