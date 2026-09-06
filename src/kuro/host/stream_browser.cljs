@@ -72,8 +72,18 @@
   `kuro.terminal/denial` (no spawn happened).
 
   opts: `:make-worker` `(fn [worker-file] Worker)` — injected so tests can
-  substitute a fake; `:timeout-ms`; `:max-output-bytes`; `:now`;
-  `:on-chunk` `(fn [stream-state chunk])`; `:on-exit` `(fn [receipt])`."
+  substitute a fake; `:max-output-bytes`; `:now`;
+  `:on-chunk` `(fn [stream-state chunk])`; `:on-exit` `(fn [receipt])`.
+
+  There is deliberately **no `:timeout-ms`** here, unlike `kuro.host.node`:
+  the guest component runs *synchronously* to completion inside the Worker
+  (`exports.run(...)` blocks the Worker's event loop), so a main-thread
+  timer could post a `cancel` but the Worker would not process it until the
+  guest returned. Bounding a guest's time is a Worker-side decision (the
+  guest yields, or is compiled with a step budget) — this host does not and
+  cannot promise it. Claiming `:timeout-ms` here would make a receipt that
+  says nothing about a deadline read as though a deadline had been applied,
+  the same lie the other providers avoid by naming what they enforce."
   [sess cmd opts]
   (cond
     ;; argv-style: the honest refusal. A browser has no processes to spawn —

@@ -149,3 +149,25 @@
                      :on-exit (fn [_] (swap! exits inc))})
         _ (@emit)]
     (is (= 1 @exits) "the second :exit is ignored, not a second receipt")))
+
+(deftest timeout-ms-is-not-a-claim-this-host-makes
+  ;; NB the docstring (and this test): the browser host deliberately takes no
+  ;; :timeout-ms. The stream-node provider documents and enforces a deadline
+  ;; (120 s default, exit 124); this host CANNOT — the guest runs to
+  ;; completion synchronously inside the Worker, so no main-thread timer can
+  ;; preempt it, and claiming a timeout would make an unbounded receipt read
+  ;; as though it had bounded time. A regression that silently started
+  ;; interpreting :timeout-ms would either lie about a constraint it cannot
+  ;; enforce or crash the guest mid-run; pin that the option does not exist
+  ;; on this contract (the guest still runs and exits normally).
+  (testing "the guest still runs to its own exit when :timeout-ms is supplied"
+    (let [exit-receipt (atom nil)
+          replies [{"kuro.stream/type" "exit" "kuro.stream/exit-code" 7}]
+          emit (atom nil)
+          _ (sb/start sess guest
+                      {:make-worker (make-worker-fn replies nil emit)
+                       :timeout-ms 1
+                       :on-exit (fn [r] (reset! exit-receipt r))})
+          _ (@emit)]
+      (is (= 7 (:kuro/exit-code @exit-receipt))
+          "the guest is NOT cut short by an (unenforceable) deadline — it ended itself"))))
