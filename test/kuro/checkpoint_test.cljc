@@ -182,3 +182,31 @@
   (testing "the untruncated case has no suffix"
     (is (not (re-find #"checkpoint dropped"
                       (cp/summary (cp/->edn (running-stream))))))))
+
+(deftest summary-declares-stream-truncation
+  ;; cp/summary の `(stream dropped NB)` 接尾辞 (`:kuro/dropped-bytes`) は
+  ;; **実行中**に出力上限 (`:max-output-bytes`) で切られた stream の checkpoint
+  ;; に現れる branch。既存の summary-declares-checkpoint-truncation は保存時
+  ;; (:max-chunk-bytes) の切れ方だけを見ていた -- 実行中に切られた実行は
+  ;; `[running] 4B` の顔のまま切った事実が運用者の最初の 1 行から消える
+  ;; regression (README「silently-cut receipt は short success と見分けが
+  ;; 付かない」の禁止が summary に漏れる) をここで止める。
+  (let [st (-> (stream/open (sess) (cmd) {:max-output-bytes 4})
+               (stream/append-chunk {:stream :stdout :text "abcd"})
+               (stream/append-chunk {:stream :stdout :text "efghij"}))
+        s (cp/summary (cp/->edn st))]
+    (is (re-find #"npm test" s))
+    (is (re-find #"\[running\]" s)
+        "base line is unchanged -- the suffix is an addition, not a replacement")
+    (is (re-find #"\(stream dropped 6B\)" s)
+        "the 6 bytes the run was cut short by are on the first line"))
+  (testing "a stream cut and a checkpoint cut are both named, not merged into one"
+    (let [st (-> (stream/open (sess) (cmd) {:max-output-bytes 5})
+                 (stream/append-chunk {:stream :stdout :text "abc"})
+                 (stream/append-chunk {:stream :stdout :text "defgh"}))
+          s (cp/summary (cp/->edn st {:max-chunk-bytes 2}))]
+      (is (re-find #"\(stream dropped 5B\)" s))
+      (is (re-find #"\(checkpoint dropped 1B\)" s))))
+  (testing "the untruncated case has no suffix"
+    (is (not (re-find #"stream dropped"
+                      (cp/summary (cp/->edn (running-stream))))))))

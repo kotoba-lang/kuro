@@ -128,11 +128,20 @@
                          result))))
 
 (defn summary
-  "checkpoint を人が読める 1 行に。運用でまず知りたいのはこれ。"
+  "checkpoint を人が読める 1 行に。運用でまず知りたいのはこれ。
+
+  切れた本文があるならどちらの層の切れ方かまで書く —— 黙って切った事実を
+  落とすと、`[running] 4B` は「短い成功」の顔をする (stream 層の
+  silently-cut 禁止が summary に漏れる)。stream 層 (:kuro/dropped-bytes,
+  実行中に上限で切った) と checkpoint 層 (:kuro.checkpoint/dropped-bytes,
+  保存時に切った) は別に報告する。"
   [cp]
   (str (:kuro/session-id cp) " "
        (str/join " " (:kuro/argv (:kuro/command cp)))
        " [" (name (:kuro.checkpoint/state cp)) "] "
        (+ (:kuro/stdout-bytes cp 0) (:kuro/stderr-bytes cp 0)) "B"
+       (when-let [d (or (:kuro/dropped-bytes cp) 0)]
+         (when (pos? d)
+           (str " (stream dropped " d "B)")))
        (when-let [d (:kuro.checkpoint/dropped-bytes cp)]
          (str " (checkpoint dropped " d "B)"))))
