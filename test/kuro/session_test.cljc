@@ -117,3 +117,47 @@
   (is (thrown-with-msg? #?(:clj Throwable :cljs js/Error)
                         #"version"
                         (sess/restore {::sess/version 99}))))
+
+(deftest a-late-attached-window-is-forward-only
+  ;; sess/attach の cursor は (dec stream-seq)。spawn 直後に attach した窓は
+  ;; seq 0 から始まるので全出力を読むが、出力が既に出た後に新しく attach した
+  ;; 窓は cursor = dec(現在seq) の位置から**前へしか進まない** —— tmux で走って
+  ;; いる session に新規 window を付けると、それ以前に流れた出力は「既に読めた
+  ;; もの」として再送されない。この非対称性は README「detach 中の窓が読めるの
+  ;; はそのコピー」の下で anchor になるが、既存テストは全て attach-at-spawn
+  ;; (cursor = -1→全部読む) しか pin しておらず、後から attach した窓が過去を
+  ;; 再送しないことが無いままだった。regression で「新窓が古い出力を全部
+  ;; replay する」方向に壊れると、同じ chunk が二度読まれる (二重配信)。
+  (testing "a window attached to a session that already emitted output starts forward-only"
+    (let [sess1 (t/session "s1" "cid:repo" :terminal-repo)
+          cmd (t/command ["echo" "x"])
+          st1 (-> (stream/open sess1 cmd)
+                  (stream/append-chunk {:stream :stdout :text "alpha"}))
+          reg (-> (sess/registry) (sess/spawn "build" st1))
+          ;; attach AFTER alpha already exists in the stream
+          reg2 (sess/attach reg "wlate" "build")]
+      (testing "the late cursor sits at dec-of-current-seq, so prior output is behind it"
+        (is (= 0 (get-in reg2 [:kuro.registry/attachments "wlate" :kuro.attachment/seq]))))
+      (testing "reading now does NOT replay alpha -- and an empty read does not move the cursor"
+        (let [[a out] (sess/read-out reg2 "wlate")]
+          (is (empty? out))
+          (is (= 0 (:kuro.attachment/seq a)) "no new output, no forward motion")))
+      (testing "output emitted after attach IS delivered"
+        (let [reg3 (update-in reg2 [:kuro.registry/sessions "build" :kuro.session/stream]
+                              stream/append-chunk {:stream :stdout :text "beta"})
+              [b out] (sess/read-out reg3 "wlate")]
+          (is (= ["beta"] (map :text out)))
+          (is (= 1 (:kuro.attachment/seq b)))))))
+  (testing "the contradiction: a window attached at spawn reads from the beginning"
+    ;; spawn 直後 (出力が無い) に付けた窓は cursor = dec(0) = -1 で、最初の chunk
+    ;; (seq 0) から読める。late-attach の forward-only と並べて両方向を pin する。
+    (let [sess1 (t/session "s1" "cid:repo" :terminal-repo)
+          cmd (t/command ["echo" "x"])
+          reg (-> (sess/registry)
+                  (sess/spawn "build" (stream/open sess1 cmd))
+                  (sess/attach "wnow" "build"))
+          reg2 (update-in reg [:kuro.registry/sessions "build" :kuro.session/stream]
+                          stream/append-chunk {:stream :stdout :text "first"})]
+      (is (= -1 (get-in reg [:kuro.registry/attachments "wnow" :kuro.attachment/seq])))
+      (let [[_ out] (sess/read-out reg2 "wnow")]
+        (is (= ["first"] (map :text out)))))))
