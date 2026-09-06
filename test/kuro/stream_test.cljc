@@ -72,3 +72,25 @@
   (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
                (stream/append-chunk (stream/open (sess) (cmd))
                                     {:stream :stdlog :text "x"}))))
+
+(deftest total-bytes-sums-both-streams
+  ;; kuro.stream's one public fn with no test anywhere: total-bytes. It is
+  ;; what append-chunk's cap check reads on every chunk (the room is computed
+  ;; from it: `(- max-output-bytes (total-bytes st))`), so it is the value
+  ;; that decides where the cap fires. If it regressed (dropped the stderr
+  ;; side, or double-counted), the enforce row "bounded output" would still
+  ;; have green tests — stream_test only asserts via stdout/stderr-bytes
+  ;; separately or via text. Pin the sum itself, in UTF-8 bytes (character
+  ;; counts would be 3x off on Japanese logs — same trap as byte-counts).
+  (testing "acceptance is ordered: stdout and stderr accumulate into one sum"
+    (let [st (-> (stream/open (sess) (cmd))
+                 (stream/append-chunk {:stream :stdout :text "ab"})
+                 (stream/append-chunk {:stream :stderr :text "cd"})
+                 (stream/append-chunk {:stream :stdout :text "あ"}))]
+      (is (= 7 (stream/total-bytes st)) "2 + 2 + 3 bytes (あ is U+3042, 3 UTF-8 bytes)")))
+  (testing "dropped bytes are NOT part of the kept total"
+    (let [st (-> (stream/open (sess) (cmd) {:max-output-bytes 4})
+                 (stream/append-chunk {:stream :stdout :text "abcd"})
+                 (stream/append-chunk {:stream :stdout :text "efg"}))]
+      (is (= 4 (stream/total-bytes st)) "the dropped 3 stay in dropped-bytes, not the sum")
+      (is (= 3 (:kuro/dropped-bytes st))))))
