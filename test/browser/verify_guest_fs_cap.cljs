@@ -99,7 +99,7 @@
 
 (def page-html
   "<!doctype html>
-<html><head><script src='/js/fs-cap.js'></script></head>
+<html><head><script src='/js/base.js'></script><script src='/js/fs-cap.js'></script></head>
 <body><script type='module'>
 window.addEventListener('error', (e) => { window.__failed = 'top: ' + e.message; });
 window.addEventListener('unhandledrejection', (e) => { window.__failed = 'rej: ' + (e.reason && e.reason.message || String(e.reason)); });
