@@ -96,9 +96,9 @@
   (let [sent (atom [])
         chunks (atom [])
         exit-receipt (atom nil)
-        replies [{"kuro.browser/type" "chunk" "stream" "stdout" "text" "hello from wasm"}
-                 {"kuro.browser/type" "chunk" "stream" "stderr" "text" "warn"}
-                 {"kuro.browser/type" "exit" "exit-code" 0 "started-at" 100 "finished-at" 150}]
+        replies [{"kuro.stream/type" "chunk" "kuro.stream/stream" "stdout" "kuro.stream/text" "hello from wasm"}
+                 {"kuro.stream/type" "chunk" "kuro.stream/stream" "stderr" "kuro.stream/text" "warn"}
+                 {"kuro.stream/type" "exit" "kuro.stream/exit-code" 0 "kuro.stream/started-at" 100 "kuro.stream/finished-at" 150}]
         emit (atom nil)
         h (sb/start sess guest
                     {:make-worker (make-worker-fn replies sent emit)
@@ -109,10 +109,12 @@
     ((:kill h))
     (@emit)
     (let [final @(:stream h)]
+    (testing "a start request was sent at construction"
+      (is (= "start" (:kuro.stream/op (first @sent)))))
     (testing "stdin was forwarded to the worker while running"
-      (is (= "stdin" (:kuro.browser/type (first @sent)))))
+      (is (= "stdin" (:kuro.stream/op (second @sent)))))
     (testing "cancel was forwarded"
-      (is (= "cancel" (:kuro.browser/type (second @sent)))))
+      (is (= "cancel" (:kuro.stream/op (nth @sent 2)))))
     (testing "chunks flowed through kuro.stream"
       (is (= 2 (count @chunks))))
     (testing "receipt is terminal-shaped and names its isolation"
@@ -126,7 +128,7 @@
 
 (deftest write-and-kill-after-exit-are-noops
   (let [sent (atom nil)
-        replies [{"kuro.browser/type" "exit" "exit-code" 0}]
+        replies [{"kuro.stream/type" "exit" "kuro.stream/exit-code" 0}]
         emit (atom nil)
         h (sb/start sess guest {:make-worker (make-worker-fn replies sent emit)})
         _ (@emit)]
@@ -134,13 +136,13 @@
     (is (not (stream/running? @(:stream h))))
     ((:write h) "late stdin")
     ((:kill h))
-    (testing "nothing was sent to the dead guest"
-      (is (empty? @sent)))))
+    (testing "only the construction-time start request was sent"
+      (is (= ["start"] (mapv :kuro.stream/op @sent))))))
 
 (deftest double-exit-produces-one-receipt
   (let [exits (atom 0)
-        replies [{"kuro.browser/type" "exit" "exit-code" 0}
-                 {"kuro.browser/type" "exit" "exit-code" 0}]
+        replies [{"kuro.stream/type" "exit" "kuro.stream/exit-code" 0}
+                 {"kuro.stream/type" "exit" "kuro.stream/exit-code" 0}]
         emit (atom nil)
         _ (sb/start sess guest
                     {:make-worker (make-worker-fn replies nil emit)
