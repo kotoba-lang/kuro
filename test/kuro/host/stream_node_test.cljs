@@ -303,3 +303,29 @@
                    (is (= "$HOME && whoami" (:kuro/stdout r))
                        "no expansion, no shell metacharacter interpretation")
                    (done)))))))
+
+(deftest write-after-close-stdin-does-not-crash-the-host
+  ;; README documents `((:write h) "y\n")` and `((:close-stdin h))` as the
+  ;; streaming stdin API. But writing to a stdin that has been `.end()`-ed is
+  ;; write-after-end: Node emits ERR_STREAM_WRITE_AFTER_END as an **async**
+  ;; 'error' event on the child's stdin socket. With no listener that is an
+  ;; unhandled 'error' -> an uncaught exception that crashed the whole nbb host
+  ;; (the kobo server) rather than failing just the write (measured: the probe
+  ;; process died with exit 1, not just a dropped byte). A late write must
+  ;; degrade to a dropped write, never take down the host. The error listener
+  ;; makes the write a no-op; this test proves the run still completes and
+  ;; on-exit still fires.
+  (testing "a write after close-stdin completes without crashing the host"
+    (async done
+      (let [h (sh/start (safe) (emit "setTimeout(()=>process.exit(0), 60)")
+                        {:repo-root "."
+                         :on-exit (fn [r]
+                                    (is (= 0 (:kuro/exit-code r))
+                                        "the child still finishes normally; the host survived")
+                                    (done))})]
+        ;; synchronously close stdin, then write to it -- write-after-end
+        ((:close-stdin h))
+        ((:write h) "too-late\n")
+        ;; if the write crashed the host as an unhandled error, this test would
+        ;; die before on-exit/done -- passing proves the write degraded instead.
+        ))))
