@@ -62,6 +62,19 @@
   (testing "256-colour and truecolor"
     (is (= {:fg {:index 214}} (:style (first (ansi/spans (str e "[38;5;214mx"))))))
     (is (= {:bg {:rgb [10 20 30]}} (:style (first (ansi/spans (str e "[48;2;10;20;30mx")))))))
+  (testing "the full extended-colour matrix covers fg/bg × 256 and truecolor"
+    ;; README「SGR ... 8 + bright + 256 + truecolor」は fg/bg 両方向を約束する。
+    ;; 既存の pin は fg-256 (38;5) と bg-true (48;2) の 2 セルだけ —— 残りの
+    ;; fg-true (38;2) と bg-256 (48;5) に test が無いと、この 2 経路が壊れて
+    ;; も全 CI が緑のまま通る。apply-sgr は 38/48 で分岐し、extended-color は
+    ;; 5/2 を読むので、行列の全セルを pin する。
+    (is (= {:fg {:rgb [10 20 30]}}
+           (:style (first (ansi/spans (str e "[38;2;10;20;30mx"))))))
+    (is (= {:bg {:index 214}}
+           (:style (first (ansi/spans (str e "[48;5;214mx"))))))
+    (testing "fg 256 + bg truecolor in one SGR stay separate"
+      (is (= {:fg {:index 214} :bg {:rgb [1 2 3]}}
+             (:style (first (ansi/spans (str e "[38;5;214;48;2;1;2;3mx"))))))))
   (testing "reset clears everything, and 39/49 clear only one channel"
     (is (= {} (ansi/apply-sgr {:fg "red" :bold true} [0])))
     (is (= {:bold true} (ansi/apply-sgr {:fg "red" :bold true} [39])))
