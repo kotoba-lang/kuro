@@ -80,7 +80,9 @@
   (when-not (= format-version (:kuro.checkpoint/version cp))
     (throw (ex-info "unknown checkpoint version"
                     {:got (:kuro.checkpoint/version cp) :expected format-version})))
-  (let [was (:kuro.checkpoint/state cp)]
+  (let [was (:kuro.checkpoint/state cp)
+        cpt-drop (or (:kuro.checkpoint/dropped-bytes cp) 0)
+        stream-drop (or (:kuro/dropped-bytes cp) 0)]
     {:kuro/type :kuro/stream
      :kuro/state (if (= :running was) :orphaned was)
      :kuro/restored-from was
@@ -91,8 +93,16 @@
      :kuro/seq (:kuro/seq cp)
      :kuro/stdout-bytes (:kuro/stdout-bytes cp)
      :kuro/stderr-bytes (:kuro/stderr-bytes cp)
-     :kuro/dropped-bytes (:kuro/dropped-bytes cp)
-     :kuro/truncated? (:kuro/truncated? cp)
+     ;; `->edn` の `:max-chunk-bytes` 切詰めは stream 層と別物: stream 自体は
+     ;; 切っていない (`:kuro/truncated? false`, `:kuro/dropped-bytes 0`) のに、
+     ;; checkpoint 層だけ保存時に切った。その事実を restore で落とすと、復元
+     ;; した orphan を `abandon` した receipt が `:kuro/truncated?` も
+     ;; `:kuro/dropped-bytes` も持たない「成功した短い出力」の顔をする ——
+     ;; stream 層の「silently-cut receipt は short success と見分けが付かない」
+     ;; 禁止と同じ穴が checkpoint 層に漏れている。切った量を stream の
+     ;; truncation に載せ、byte カウンタの pre-truncation 真実は保持する。
+     :kuro/dropped-bytes (+ stream-drop cpt-drop)
+     :kuro/truncated? (or (:kuro/truncated? cp) (pos? cpt-drop))
      :kuro/max-output-bytes (:kuro/max-output-bytes cp)}))
 
 (defn orphaned?

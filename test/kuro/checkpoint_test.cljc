@@ -100,6 +100,44 @@
         (is (not (contains? clean :kuro/truncated?)))
         (is (not (contains? clean :kuro/dropped-bytes)))))))
 
+(deftest checkpoint-layer-truncation-survives-restore
+  ;; README は 2 つの切り詰めを区別する: kuro.stream の `:max-output-bytes`
+  ;; (実行中に切る) と kuro.checkpoint の `:max-chunk-bytes` (保存時に切る)。
+  ;; 後者は stream 自体は untruncated のまま切り、`:kuro.checkpoint/dropped-bytes`
+  ;; にだけ記録する —— だから restore でその事実を落とすと、`abandon` した
+  ;; receipt が `:kuro/truncated?` も `:kuro/dropped-bytes` も持たない
+  ;; 「成功した短い出力」の顔をする (stream 層の禁止が checkpoint 層に漏れる)。
+  ;; 既存の a-truncated-orphan-closes-as-a-truncated-receipt は stream 層の
+  ;; 切り詰めだけを pin していたが、checkpoint 層は→edn/restore/abandon の
+  ;; 接合を通して切った事実が残ることを pin していなかった。
+  (let [st (-> (stream/open (sess) (cmd))
+               (stream/append-chunk {:stream :stdout :text "0123456789"}))
+        cp (cp/->edn st {:max-chunk-bytes 4})]
+    (testing "the checkpoint records the cut at the checkpoint layer"
+      (is (= 6 (:kuro.checkpoint/dropped-bytes cp)))
+      (is (= false (:kuro/truncated? cp)) "the stream itself was not capped"))
+    (testing "the restored orphan carries the cut as truncation"
+      (let [back (cp/restore cp)]
+        (is (true? (:kuro/truncated? back)))
+        (is (= 6 (:kuro/dropped-bytes back)))
+        (is (= 10 (:kuro/stdout-bytes back)) "pre-truncation truth is kept")))
+    (testing "and the abandoned receipt says it was cut, not a clean short exit"
+      (let [r (cp/abandon (cp/restore cp))]
+        (is (= 129 (:kuro/exit-code r)))
+        (is (true? (:kuro/truncated? r)))
+        (is (= 6 (:kuro/dropped-bytes r)))
+        (is (= "0123" (:kuro/stdout r)) "only the kept body, never the dropped tail"))))
+  (testing "checkpoint-layer and stream-layer cuts compose — both are reported"
+    (let [st (-> (stream/open (sess) (cmd) {:max-output-bytes 5})
+                 (stream/append-chunk {:stream :stdout :text "abc"})   ; kept (3 <= cap 5)
+                 (stream/append-chunk {:stream :stdout :text "defgh"})) ; over: dropped 5
+          cp (cp/->edn st {:max-chunk-bytes 2})]                       ; keep "ab", cut 1
+      ;; stream cut 5 (defgh over the 5 cap), checkpoint cut 1 on the kept prefix "abc"->"ab"
+      (is (= 1 (:kuro.checkpoint/dropped-bytes cp)))
+      (let [back (cp/restore cp)]
+        (is (true? (:kuro/truncated? back)))
+        (is (= 6 (:kuro/dropped-bytes back)) "stream cut + checkpoint cut both survive")))))
+
 (deftest cap-spans-chunks
   (let [st (-> (stream/open (sess) (cmd))
                (stream/append-chunk {:stream :stdout :text "aaaa"})
