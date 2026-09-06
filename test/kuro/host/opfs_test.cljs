@@ -11,7 +11,8 @@
   (:require [cljs.test :refer [deftest is testing]]
             [clojure.string :as str]
             [kuro.host.opfs :as opfs]
-            [kuro.host.cid :as cid]))
+            [kuro.host.cid :as cid]
+            ["node:child_process" :as cproc]))
 
 (deftest request-wire-shape
   (let [m (opfs/request 7 :put {:cid "bafk-x" :bytes (js/Uint8Array. #js [1 2 3])})]
@@ -136,3 +137,38 @@
     (let [partial (opfs/reply 2 :drop-cache nil :drop-cache-failed)]
       (is (= :drop-cache-failed (:kuro.opfs/error partial)))
       (is (nil? (:kuro.opfs/result partial))))))
+
+
+
+;; README (kuro.host.opfs section) claims the CID math is parity-locked
+;; against "an independent Python mint" (scripts/cid_mint.py), and that the
+;; three mints — node:crypto, WebCrypto-in-Worker, the Python mint — are
+;; byte-identical for the same bytes. That claim previously told a story with
+;; nothing running it: no .py file, no CI step, no pin. This test makes it a
+;; claim that RUNS: it spawns the independent Python mint on the same vectors
+;; the cljs mint is pinned against, and requires both to agree.
+;;
+;; Comparison path matters: `cid/sha256-raw-cid` is the FRAMING layer — it
+;; expects a pre-hashed 32-byte digest (what the Worker's WebCrypto hands it)
+;; and does NOT hash its own input. The full hash-to-CID path is
+;; `cid/text-cid` (node:crypto sha-256 over the UTF-8 bytes, then frame) —
+;; exactly what `kuro.host.stream-node` mints for stdout/stderr receipts. So
+;; this test pins `text-cid` (the real mint) against the independent Python
+;; mint, which also hashes. Pinning `sha256-raw-cid` on raw non-digest bytes
+;; would only prove two framings of the same misguided bytes agree — not that
+;; the CID equals the hash of the content.
+(deftest python-mint-parity
+  (let [spawn (fn [& args]
+                (let [r (cproc/spawnSync "python3" (clj->js (into ["scripts/cid_mint.py"] args)))]
+                  (when-not (zero? (.-status r))
+                    (throw (js/Error. (str "python mint failed: " (.-status r) " " (.-stderr r)))))
+                  (str/trim (.toString (.-stdout r)))))]
+    (testing "kuro.host.cid (node:crypto mint) and the independent Python mint agree on pin vectors"
+      (is (= (cid/text-cid "hello") (spawn "hello")))
+      (is (= (cid/text-cid "world") (spawn "world")))
+      (is (= (cid/text-cid "") (spawn "")))
+      (is (= (cid/text-cid "kuro") (spawn "kuro"))))
+    (testing "the pinned golden values are stable (regression net for delimiter / alphabet bugs)"
+      (is (= "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44yegnrjhc4yeq" (spawn "hello")))
+      (is (= "bafkreicin2sgejgrxnh3nahtj56jvwlkr4sozcf6opvi4wtmmuta5hfyu4" (spawn "world")))
+      (is (= "bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku" (spawn ""))))))
