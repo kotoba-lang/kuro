@@ -65,6 +65,28 @@
     (is (= [{:name "a.txt" :type :file :size 2}]
            (map #(select-keys % [:name :type :size]) entries)))))
 
+(deftest ls-sorts-entries-by-name
+  ;; kuro.fs/ls の docstring は「[{:name :type :size} ...] sorted by name」と
+  ;; 宣言するが、既存テスト (mkdir-and-ls / rm-file-then-list) は全て単一
+  ;; sibling のディレクトリだけを見る —— ソートが消えたり逆順になったりして
+  ;; も全 suite が緑のまま通る。名前順は呼び出し側が並び順を仮定する契約な
+  ;; ので、name の辞書順を複数 sibling で pin する (sort-by :name の
+  ;; 実態をそのまま固定 — type/file の別は順序に関与しない)。挿入順が
+  ;; 逆順 (a → z → m) でも並びは name 順に直ることを pin する。
+  (let [blocks (atom {})
+        st (fs/store)
+        [st1] (fs/write st "a.txt" some-bytes (fake-put blocks))
+        [st2] (fs/write st1 "z.txt" some-bytes (fake-put blocks))
+        [st3] (fs/write st2 "m.txt" some-bytes (fake-put blocks))
+        [_ entries] (fs/ls st3 ".")]
+    (is (= ["a.txt" "m.txt" "z.txt"] (mapv :name entries))
+        "entries come back sorted by :name, not by insertion order")
+    (is (= [{:name "a.txt" :type :file :size 2}
+            {:name "m.txt" :type :file :size 2}
+            {:name "z.txt" :type :file :size 2}]
+           (map #(select-keys % [:name :type :size]) entries)))))
+
+
 (deftest denial-not-exception
   (let [blocks (atom {})
         st (fs/store)]
