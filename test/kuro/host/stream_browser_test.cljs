@@ -235,3 +235,35 @@
         (@emit)
       (is (= 500 (:kuro/started-at @exit-receipt)))
       (is (= 600 (:kuro/finished-at @exit-receipt))))))
+
+
+(deftest start-returns-the-live-worker
+  ;; kuro.host.stream-browser/start's docstring documents the success handle's
+  ;; shape: `{:stream <atom of kuro.stream> :write fn :kill fn :worker <Worker>}`
+  ;; -- the browser analog of stream-node's documented `:pid` (which
+  ;; start-returns-the-live-pid pins in stream_node_test). The suite exercises
+  ;; :stream / :write / :kill everywhere (it calls them), but :worker is only
+  ;; ever asserted *nil in the denial path* (argv-is-denied-without-creating-a-
+  ;; worker: "no worker was created") -- no test proves a SUCCESSFUL start
+  ;; actually returns the worker it created. A regression that dropped the
+  ;; :worker field from the returned map (or returned a placeholder) would
+  ;; leave every CI job green while a caller who stores the worker to observe
+  ;; the guest or reply to it out-of-band silently got nil -- the same silent
+  ;; field-loss class #89 closed for stream-node's :pid. Pin: the success
+  ;; handle carries the worker object :make-worker actually created, and stays
+  ;; present alongside the other documented keys.
+  (let [created (atom nil)
+        h (sb/start sess guest
+                    {:make-worker (fn [_]
+                                    (let [w (fake-worker [] (atom []))]
+                                      (reset! created w)
+                                      w))})]
+    (testing "the documented handle shape is present on a real start"
+      (is (contains? h :stream))
+      (is (contains? h :write))
+      (is (contains? h :kill))
+      (is (contains? h :worker)))
+    (testing "the worker names the object make-worker created - present, not nil"
+      (is (some? (:worker h)))
+      (is (identical? @created (:worker h))
+          "the handle's :worker IS the worker the host got from make-worker, not a stand-in"))))
