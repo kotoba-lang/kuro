@@ -215,6 +215,26 @@
                                 "anything else in the child env is a leak"))
                           (done))})))
 
+(deftest caller-supplied-env-replaces-the-default-manifest
+  ;; README "The same guarantees apply" — declared environment. Both providers
+  ;; document a caller-supplied `:env` (`kuro.host.node/run` opts, `start` opts),
+  ;; yet the existing env tests only pin the *default* manifest — none passes a
+  ;; caller `:env`. Pin the option's semantics here: a caller-provided manifest
+  ;; **replaces** default-env wholesale, it is not merged in. If a replace were
+  ;; turned into a merge, a caller who declares only CUSTOM_MARKER would silently
+  ;; inherit the default PATH/LANG/TERM too — and TERM=dumb would leak into a run
+  ;; as a claimed guarantee over a pipe. OS-independent: __CF_USER_TEXT_ENCODING
+  ;; (the one unavoidable macOS injection) is never queried.
+  (async done
+    (sh/start (safe)
+              (emit "process.stdout.write((process.env.CUSTOM_MARKER||'none') + ':P=' + (process.env.PATH?'y':'n') + ':L=' + (process.env.LANG?'y':'n') + ':T=' + (process.env.TERM?'y':'n'))")
+              {:repo-root "."
+               :env {"CUSTOM_MARKER" "set"}
+               :on-exit (fn [r]
+                          (is (= "set:P=n:L=n:T=n" (:kuro/stdout r))
+                              "replace, not merge — default PATH/LANG/TERM don't leak in")
+                          (done))})))
+
 (deftest stream-cwd-escape-throws
   (is (thrown? ExceptionInfo
                (sh/start (t/session "s1" "repo-cid" :terminal-repo {:kuro/cwd ".."})
