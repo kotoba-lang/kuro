@@ -174,3 +174,41 @@
                               (testing "the original window keeps its full prefix"
                                 (is (= ["a\n" "b\n" "c\n"] (map :text (sup/read-window s "build")))))
                               (done))}))))
+(deftest start-binds-a-window-id-distinct-from-the-session-name
+  ;; sup/start! docstring: "sess で cmd を spawn し、registry に name で登録、
+  ;; 窓 :window-id (既定 name) を付ける。" The default path (window id = session
+  ;; name) is what every existing start! test exercises, so `(or (:window-id
+  ;; opts) name)` and `(sess/attach wire name)` could regress to "always name"
+  ;; and the whole suite would stay green -- a caller who spawned a session
+  ;; under one name and attached a *differently*-named window to it would
+  ;; silently lose the separation. Pin that a caller-supplied :window-id
+  ;; actually becomes the attachment id: the session is registered as "build",
+  ;; the window is attached as "w1" (bound to "build"), output is readable from
+  ;; the window id and not the session name, and the receipt is kept on the
+  ;; session name.
+  (async done
+    (let [s (sup/new-supervisor)]
+      (sup/start! s "build" (safe)
+                  (emit "process.stdout.write('hi\\n'); setTimeout(()=>process.exit(0),40)")
+                  {:repo-root "."
+                   :window-id "w1"
+                   :on-exit (fn [_]
+                              (testing "the receipt is kept on the session name, not the window"
+                                (is (= 0 (:kuro/exit-code (sup/receipt-of s "build"))))
+                                (is (nil? (sup/receipt-of s "w1"))))
+                              (testing "state is keyed by session name"
+                                (is (= {"build" :exited} (sup/session-states s))))
+                              (testing "output is readable from the window id"
+                                (is (= ["hi\n"] (map :text (sup/read-window s "w1")))
+                                    "the w1 attachment received the streamed chunk"))
+                              (done))})
+      (testing "the window is attached under the caller's id, bound to the session"
+        (is (= "build"
+                (get-in (sup/registry s)
+                        [:kuro.registry/attachments "w1" :kuro.attachment/session]))
+            "the w1 window points at the build session"))
+      (testing "the session itself is the registry entry the caller named"
+        (is (= {"build" :running} (sup/session-states s))))
+      (testing "no implicit window is created under the session name"
+        (is (nil? (get-in (sup/registry s)
+                          [:kuro.registry/attachments "build"])))))))
