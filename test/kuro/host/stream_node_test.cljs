@@ -379,3 +379,30 @@
                             (is (= #{"repo/read" "tmp/write" "log/write"}
                                    (:kuro/effective-capabilities r))))
                           (done))}))))
+
+
+(deftest streaming-clock-is-injectable
+  ;; README (“The same guarantees apply”) and stream-node's ns docstring
+  ;; document `:now` as an opts key of start; the sync provider pins that a
+  ;; caller-supplied clock reaches started-at/finished-at/duration-ms
+  ;; (node_test: clock-is-injectable). The streaming path calls
+  ;; `(now)` once for `started` and once for `finished` (stream_node:71,96)
+  ;; and carries both into stream/finish -- with no test proving the carrier
+  ;; stays wired. A regression to `js/Date.now` inside start would leave the
+  ;; whole suite green while the documented injectable clock silently stopped
+  ;; working (the same class of loss rule 2 warns about: a .cljc/host seam
+  ;; tested on one path alone). Pin both stamps plus the derived duration.
+  (testing "a caller-supplied clock reaches the streaming receipt"
+    (async done
+      (let [ticks (atom [100 350])]
+        (sh/start (safe) (emit "0")
+                  {:repo-root "."
+                   :now #(let [[t & more] @ticks]
+                           (reset! ticks (or more [t]))
+                           t)
+                   :on-exit (fn [r]
+                              (is (= 100 (:kuro/started-at r)))
+                              (is (= 350 (:kuro/finished-at r)))
+                              (is (= 250 (:kuro/duration-ms r)))
+                              (done))})))))
+
