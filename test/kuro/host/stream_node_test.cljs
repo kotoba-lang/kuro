@@ -13,6 +13,32 @@
 
 (defn- safe [] (t/session "s1" "repo-cid" :terminal-repo))
 (defn- emit [src] (t/command [node "-e" src]))
+(deftest start-returns-the-live-pid
+  ;; kuro.host.stream-node's docstring documents the start handle's shape:
+  ;; `{:stream <atom of kuro.stream> :write fn :kill fn :pid n}`. The suite
+  ;; exercises :stream / :write / :close-stdin / :kill everywhere, but :pid is
+  ;; only ever asserted *nil in the denial path* (denial-happens-before-spawn) --
+  ;; no test proves a SUCCESSFUL start actually returns the child's live pid.
+  ;; A regression that dropped the :pid field from the returned map (or stopped
+  ;; reading `(.-pid proc)`) would leave every CI job green while a caller who
+  ;; stores the pid to observe / externally terminate the child silently got
+  ;; nil. Pin: the success handle carries a positive integer pid that names the
+  ;; live process, and stays present alongside the other documented keys.
+  (let [h (sh/start (safe) (emit "process.stdout.write('alive')") {:repo-root "."})]
+    (testing "the documented handle shape is present on a real spawn"
+      (is (contains? h :stream))
+      (is (contains? h :write))
+      (is (contains? h :kill))
+      (is (contains? h :pid)))
+    (testing "the pid names the live child - a positive integer, not nil/0"
+      (is (integer? (:pid h)))
+      (is (pos? (:pid h)))))
+  ;; and the denial path reports no pid - a denial creates no process to name.
+  (let [denied (sh/start (t/session "s1" "repo-cid" :terminal-repo
+                                    {:kuro/grant {:capabilities #{}}})
+                          (emit "0") {:repo-root "."})]
+    (is (nil? (:pid denied)))))
+
 
 (deftest streams-output-before-the-process-exits
   (async done
