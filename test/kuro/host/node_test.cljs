@@ -182,6 +182,23 @@
         (is (= "dumb:undefined" (:kuro/stdout r))
             "we must not claim xterm over a pipe")))))
 
+(deftest caller-supplied-env-replaces-the-default-manifest
+  ;; README / `run` opts list `:env (default default-env)`; the docstring says
+  ;; the child env is exactly the declared manifest. Both existing env tests
+  ;; only exercise the *default* manifest — none passes a caller `:env`. This
+  ;; pins the documented option's semantics: a caller-provided manifest
+  ;; **replaces** default-env wholesale, it is not merged in. If it were merged,
+  ;; a caller who declares a minimal {PATH} map would silently also inherit the
+  ;; default vars, and TERM=dumb would leak into a run as a claimed guarantee
+  ;; over a pipe. OS-independent — __CF_USER_TEXT_ENCODING is never queried.
+  (let [r (host/run (safe-session)
+                    (emit "process.stdout.write((process.env.CUSTOM_MARKER||'none') + ':P=' + (process.env.PATH?'y':'n') + ':L=' + (process.env.LANG?'y':'n') + ':T=' + (process.env.TERM?'y':'n'))")
+                    {:repo-root "."
+                     :env {"CUSTOM_MARKER" "set"}})]
+    (is (= 0 (:kuro/exit-code r)))
+    (is (= "set:P=n:L=n:T=n" (:kuro/stdout r))
+        "the caller's var reaches the child; PATH/LANG/TERM don't leak in")))
+
 (deftest no-shell-interpolation
   (testing "argv reaches the binary verbatim — $HOME is a literal, not expanded"
     (let [r (host/run (safe-session) (t/command ["/bin/echo" "$HOME" "&&" "whoami"])
