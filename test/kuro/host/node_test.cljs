@@ -52,6 +52,30 @@
         ;; 'b' + base32(36 bytes) = 1 + ceil(36*8/5) = 59
         (is (= 59 (count c)))))))
 
+(deftest base32-lower-no-pad-encodes-rfc4648
+  ;; `kuro.host.cid/base32-lower-no-pad` is a public fn whose docstring makes a
+  ;; standalone port claim — "port of kotobase-client's base32-lower-no-pad",
+  ;; "32-bit accumulator draining 5-bit groups MSB-first", byte-identical to the
+  ;; kotobase edge. It is the one cid fn with no direct test: the parity gate
+  ;; (opfs python-mint-parity) only exercises it *through a sha256 digest*, so a
+  ;; codec regression shared by the framing layer AND the Python mint (wrong
+  ;; alphabet, reversed drain order, dropped no-pad, mishandled final partial
+  ;; group) would stay green while every real CID went wrong. Pin the
+  ;; independent RFC 4648 §10 base32 vectors in lowercase, unpadded form —
+  ;; they do not pass through any hash, so they cannot be masked by one.
+  ;; (Verified identical to `scripts/cid_mint.py`'s base32_lower_no_pad and to
+  ;; Python's base64.b32encode, the reference stdlib the parity gate trusts.)
+  (let [enc (fn [s] (cid/base32-lower-no-pad (js/Buffer.from s "utf8")))]
+    (is (= ""              (enc "")))
+    (is (= "my"            (enc "f")))
+    (is (= "mzxq"          (enc "fo")))
+    (is (= "mzxw6"         (enc "foo")))
+    (is (= "mzxw6yq"       (enc "foob")))
+    (is (= "mzxw6ytb"      (enc "fooba")))
+    (is (= "mzxw6ytboi"    (enc "foobar")))
+    (testing "the alphabet is lowercase a-z + 2-7, never A-Z or +/' (no pad)"
+      (is (not (re-find #"[A-Z+/=]" (enc "foobar")))))))
+
 (deftest cid-is-content-addressed
   (is (= (cid/text-cid "same") (cid/text-cid "same")))
   (is (not= (cid/text-cid "a") (cid/text-cid "b"))))
