@@ -142,3 +142,35 @@
     (is (false? (:kuro/allowed? out)))
     (is (= {} (sup/session-states s)) "no session registered on denial")
     (is (nil? (sup/handle-of s "x")) "no child was created")))
+
+(deftest attach-window-pins-a-fresh-window-as-forward-only
+  ;; sup/attach-window! is the supervisor's public attach seam - the analog of
+  ;; sess/attach at the supervisor level. start! wires sess/spawn + sess/attach
+  ;; internally and reattach-window! is pinned (verify-after-gap), but a direct
+  ;; attach-window! call on a live session was never exercised - the one public
+  ;; sup fn the suite does not hit. A regression that broke it (window not
+  ;; registered, or a fresh window replaying the already-streamed prefix) would
+  ;; stay green. Pin: the new window's cursor starts at (dec current-seq), so
+  ;; nothing already streamed is replayed, while output that lands after the
+  ;; attach still reaches it (session-test's a-late-attached-window-is-forward-
+  ;; only, at the supervisor seam).
+  (async done
+    (let [s (sup/new-supervisor)
+          seen (atom 0)]
+      (sup/start! s "build" (safe)
+                  (emit "process.stdout.write('a\\n'); setTimeout(()=>process.stdout.write('b\\n'),15); setTimeout(()=>process.stdout.write('c\\n'),45); setTimeout(()=>process.exit(0),90)")
+                  {:repo-root "."
+                   :on-chunk (fn [_ _]
+                               (when (= 2 (swap! seen inc))
+                                 ;; 'a' and 'b' have streamed; attach a brand-new window now
+                                 (sup/attach-window! s "w2" "build")
+                                 (is (empty? (sup/read-window s "w2"))
+                                     "a fresh attach replays nothing already streamed")))
+                   :on-exit (fn [r]
+                              (is (= 0 (:kuro/exit-code r)))
+                              (testing "the late-attached window sees only what streams in after it"
+                                (is (= ["c\n"] (map :text (sup/read-window s "w2")))
+                                    "forward-only from the attach moment: no replay, no loss"))
+                              (testing "the original window keeps its full prefix"
+                                (is (= ["a\n" "b\n" "c\n"] (map :text (sup/read-window s "build")))))
+                              (done))}))))
