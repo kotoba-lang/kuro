@@ -92,13 +92,22 @@ window.__drain = () => JSON.stringify({events: events, done: done, failed: windo
                  "  (func (export \"run\") (param $a i32) (param $b i32) (result i32)\n"
                  "    (local $sum i32)\n"
                  "    (local.set $sum (i32.add (local.get $a) (local.get $b)))\n"
-                 "    (i32.store8 (i32.const 2048) (i32.const 115))\n"
-                 "    (i32.store8 (i32.const 2049) (i32.const 117))\n"
-                 "    (i32.store8 (i32.const 2050) (i32.const 109))\n"
-                 "    (i32.store8 (i32.const 2051) (i32.const 61))\n"
-                 "    (i32.store8 (i32.const 2052) (i32.add (i32.const 48)\n"
+                 "    ;; UTF-8 for \u3042 (E3 81 82) and \u3053 (E3 81 93): readChunk\n"
+                 "    ;; must decode bytes as UTF-8, not String.fromCharCode each\n"
+                 "    ;; one (that mangles every non-ASCII char into mojibake).\n"
+                 "    (i32.store8 (i32.const 2048) (i32.const 227))\n"
+                 "    (i32.store8 (i32.const 2049) (i32.const 129))\n"
+                 "    (i32.store8 (i32.const 2050) (i32.const 130))\n"
+                 "    (i32.store8 (i32.const 2051) (i32.const 227))\n"
+                 "    (i32.store8 (i32.const 2052) (i32.const 129))\n"
+                 "    (i32.store8 (i32.const 2053) (i32.const 147))\n"
+                 "    (i32.store8 (i32.const 2054) (i32.const 115))\n"
+                 "    (i32.store8 (i32.const 2055) (i32.const 117))\n"
+                 "    (i32.store8 (i32.const 2056) (i32.const 109))\n"
+                 "    (i32.store8 (i32.const 2057) (i32.const 61))\n"
+                 "    (i32.store8 (i32.const 2058) (i32.add (i32.const 48)\n"
                  "                 (i32.div_u (local.get $sum) (i32.const 10))))\n"
-                 "    (i32.store8 (i32.const 2053) (i32.add (i32.const 48)\n"
+                 "    (i32.store8 (i32.const 2059) (i32.add (i32.const 48)\n"
                  "                 (i32.rem_u (local.get $sum) (i32.const 10))))\n"
                  "    (local.get $sum)))\n")
         wat-path (.join path tmp-dir "stream-worker-guest.wat")
@@ -119,7 +128,7 @@ window.__drain = () => JSON.stringify({events: events, done: done, failed: windo
         acks (filter #(= "ack" (:kuro.stream/type %)) events)
         ok? (and (:done r)
                  (= 1 (count chunks))
-                 (= "sum=42" (:kuro.stream/text (first chunks)))
+                 (= "\u3042\u3053sum=42" (:kuro.stream/text (first chunks)))
                  (= "stdout" (:kuro.stream/stream (first chunks)))
                  (= 1 (count exits))
                  (= 42 (:kuro.stream/exit-code exit))
