@@ -201,3 +201,37 @@
           "the bytes dropped past the cap are counted, not hidden")
       (is (empty? (:kuro/stdout @exit-receipt))
           "the kept stream is an exact prefix of what was emitted (empty here)"))))
+
+
+(deftest the-injectable-clock-reaches-the-posted-start-request
+  ;; stream-browser/start docstring lists `:now` as a public option and wires
+  ;; it into the start request's `kuro.stream/started-at` (`(or (:now opts)
+  ;; (js/Date.now))`). The stream-node provider got its caller-supplied clock
+  ;; pinned (stream_node_test, `:now` -> :kuro/started-at + :duration-ms);
+  ;; the browser side had NO test wiring it through. If the `(or (:now opts)
+  ;; ...)` in this host silently stopped honouring the option, every posted
+  ;; start message would carry the unbounded Date.now value instead of the
+  ;; caller's clock, and nothing here would notice -- the same
+  ;; documented-seam-goes-silent class the stream-node clock test guards
+  ;; against. Pin that the supplied clock reaches the construction-time
+  ;; start message, and that it stays distinct from the worker's own reported
+  ;; timestamps on the receipt.
+  (let [sent (atom [])
+        exit-receipt (atom nil)
+        replies [{"kuro.stream/type" "exit" "kuro.stream/exit-code" 0
+                  "kuro.stream/started-at" 500 "kuro.stream/finished-at" 600}]
+        emit (atom nil)
+        _ (sb/start sess guest
+                    {:make-worker (make-worker-fn replies sent emit)
+                     :now (fn [] 1234)
+                     :on-exit (fn [r] (reset! exit-receipt r))})
+        start-msg (first @sent)]
+    (testing "the caller's clock, not Date.now, is stamped on the start request"
+      (is (= 1234 (:kuro.stream/started-at start-msg))
+          "the injectable clock names when the run was asked to start"))
+    (testing "the start request is the construction-time message"
+      (is (= "start" (:kuro.stream/op start-msg))))
+    (testing "the worker's own timestamps still pass through to the receipt"
+        (@emit)
+      (is (= 500 (:kuro/started-at @exit-receipt)))
+      (is (= 600 (:kuro/finished-at @exit-receipt))))))

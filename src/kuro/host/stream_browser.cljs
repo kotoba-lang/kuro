@@ -150,7 +150,8 @@
                         ;; on op "start" — posting it is the host's job.
                         (.call pm worker #js {"kuro.stream/type"        "request"
                                               "kuro.stream/op"         "start"
-                                              "kuro.stream/started-at" (or (:now opts)
+                                              "kuro.stream/started-at" (if-let [now (:now opts)]
+                                                                           (now)
                                                                            (js/Date.now))
                                               "kuro.stream/payload"    #js {"guest" (or
                                                                                     (:kuro.browser/guest cmd)
