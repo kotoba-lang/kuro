@@ -401,6 +401,34 @@
 
 
 
+(deftest truncation-precedence-over-the-deadline
+  ;; The cap and the deadline can both be configured; when the cap fires
+  ;; first the run is *capped*, and a deadline that later elapses must not
+  ;; come back and relabel the same run timed-out. take-chunk! SIGKILLs on
+  ;; truncation, but until the fix it left the :timeout-ms timer armed (only
+  ;; the close/error handlers disarmed it): in the window between the kill and
+  ;; the close event a firing deadline called finish! first with
+  ;; {:exit-code 124 :timed-out? true} and marked done, so the final receipt
+  ;; claimed a timeout for a run the provider actually stopped for the output
+  ;; cap. Consumers branch on exit-code, so 124 vs 125 changes how the run is
+  ;; categorised, not just a flag. Pin: a capped run reports itself as
+  ;; truncated (125), never as timed-out. (The sub-ms kill-to-close window
+  ;; itself is not deterministically reproducible from a real spawn; this pins
+  ;; the precedence contract and guards the common path.)
+  (async done
+    (sh/start (safe)
+              (emit "setInterval(()=>process.stdout.write('x'.repeat(8192)), 1)")
+              {:repo-root "." :max-output-bytes 4096 :timeout-ms 3000
+               :on-exit (fn [r]
+                          (is (= 125 (:kuro/exit-code r))
+                              "the cap won, so the run is categorized truncated")
+                          (is (true? (:kuro/truncated? r)))
+                          (is (pos? (:kuro/dropped-bytes r)))
+                          (is (nil? (:kuro/timed-out? r))
+                              "a capped run is never relabelled as a timeout")
+                          (done))})))
+
+
 (deftest streaming-receipt-carries-the-session-context-shape
   ;; README: "A receipt is uniformly :kuro/*" and stream-node's ns docstring
   ;; "保証は kuro.host.node と同じ". kuro.host.node pins its sync receipt's

@@ -73,6 +73,10 @@
               on-chunk (:on-chunk opts (fn [_ _]))
               on-exit (:on-exit opts (fn [_]))
               done? (atom false)
+              ;; 期限 timer のハンドルを、後に繋がれる take-chunk!からも読めるようにする。
+              ;; let は後続の繋びを先行の fn 本文には見せないが、
+              ;; take-chunk! は spawn 後にしか走らないので、実行時には必ず設定済みの値が見える。
+              timer-ref (atom nil)
               proc (cp/spawn (first argv) (clj->js (vec (rest argv)))
                              #js {:cwd cwd
                                   :env (clj->js (:env opts default-env))
@@ -88,6 +92,11 @@
                     ;; 違い非同期版は勝手に殺してくれないので、無限に吐く子が
                     ;; あるとメモリではなく時間だけが溶ける。
                     (when (and (:kuro/truncated? @st) (not @done?))
+                      ;; close/error と同じく timer も外してから殺す。外さないと
+                      ;; SIGKILL から close までの窓で timeout が先に発火し、実際の
+                      ;; 停止理由は出力上限なのに receipt が exit 124 / timed-out?
+                      ;; を名乗ってしまう。
+                      (when-let [t @timer-ref] (js/clearTimeout t))
                       (.kill proc "SIGKILL")))))
               finish!
               (fn [result]
