@@ -26,7 +26,7 @@
                             (is (= "one\ntwo\n" (:kuro/stdout r)))
                             (testing "output arrived in pieces, not all at the end"
                               (is (= 2 (count @chunks))))
-                            (done))}))))
+                            (done))})))
 
 (deftest stdin-reaches-the-child
   (async done
@@ -353,3 +353,29 @@
                                 "nothing was written to stdout")
                             (done))}))))
 
+
+
+(deftest streaming-receipt-carries-the-session-context-shape
+  ;; README: "A receipt is uniformly :kuro/*" and stream-node's ns docstring
+  ;; "保証は kuro.host.node と同じ". kuro.host.node pins its sync receipt's
+  ;; session context (:kuro/mode + :kuro/effective-capabilities in
+  ;; run-and-receipts, :kuro/argv via receipt-fact); the streaming path's
+  ;; receipt only pinned isolation + key namespacing (stream-receipt-never-
+  ;; omits-isolation). If sh/start's finish path (or stream/finish) stopped
+  ;; carrying the session into the receipt, the sync suite would stay green
+  ;; while every streaming receipt lost its session identity -- who ran it,
+  ;; from where, with what grant. Pin the full fixed shape here.
+  (async done
+    (sh/start (t/session "s1" "cid:repo" :terminal-repo {:kuro/cwd "sub"})
+              (t/command ["echo" "hello"])
+              {:repo-root "."
+               :on-exit (fn [r]
+                          (testing "the streaming receipt carries the session context"
+                            (is (= "s1" (:kuro/session-id r)))
+                            (is (= "cid:repo" (:kuro/repo-root-cid r)))
+                            (is (= :terminal-repo (:kuro/mode r)))
+                            (is (= "sub" (:kuro/cwd r)))
+                            (is (= ["echo" "hello"] (:kuro/argv r)))
+                            (is (= #{"repo/read" "tmp/write" "log/write"}
+                                   (:kuro/effective-capabilities r))))
+                          (done))}))))
