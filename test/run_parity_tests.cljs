@@ -21,6 +21,36 @@
             [kuro.stream-test]
             [kuro.terminal-test]))
 
+;; Registration guard — same rationale as run_host_tests.cljs (issue #99):
+;; nbb's SCI analyzer can silently intern a deftest with no `:test` meta, so
+;; `cljs.test` runs fewer tests than the source declares while staying green.
+;; All six parity namespaces are 100% today; the guard pins that they stay so.
+(def deftest-count
+  {'kuro.ansi-test 14
+   'kuro.checkpoint-test 13
+   'kuro.fs-test 13
+   'kuro.session-test 12
+   'kuro.stream-test 10
+   'kuro.terminal-test 17})
+
+(defn- registered-deftests
+  [ns-sym]
+  (count (filter (fn [[_ v]] (:test (meta v)))
+                 (ns-interns (find-ns ns-sym)))))
+
+(defn- assert-deftests-registered!
+  []
+  (doseq [[ns-sym expected] deftest-count]
+    (let [registered (registered-deftests ns-sym)]
+      (when (not= expected registered)
+        (println "TEST-REGISTRATION-GAP" (str ns-sym)
+                 "expected" expected "deftests but nbb registered" registered
+                 "- a deftest silently failed to compile; the suite below is NOT"
+                 "exercising the code it claims to.")
+        (set! (.-exitCode js/process) 1)))))
+
+(assert-deftests-registered!)
+
 (defmethod test/report [::test/default :end-run-tests] [m]
   (when-not (test/successful? m)
     (set! (.-exitCode js/process) 1)))

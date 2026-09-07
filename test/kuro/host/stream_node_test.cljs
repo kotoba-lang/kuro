@@ -52,7 +52,7 @@
                             (is (= "one\ntwo\n" (:kuro/stdout r)))
                             (testing "output arrived in pieces, not all at the end"
                               (is (= 2 (count @chunks))))
-                            (done))})))
+                            (done))}))))
 
 (deftest stdin-reaches-the-child
   (async done
@@ -452,7 +452,7 @@
                             (is (= ["echo" "hello"] (:kuro/argv r)))
                             (is (= #{"repo/read" "tmp/write" "log/write"}
                                    (:kuro/effective-capabilities r))))
-                          (done))}))))
+                          (done))})))
 
 
 (deftest multibyte-char-split-across-pipe-chunks-stays-whole
