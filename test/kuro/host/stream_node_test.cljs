@@ -427,6 +427,24 @@
                           (done))}))))
 
 
+(deftest multibyte-char-split-across-pipe-chunks-stays-whole
+  ;; comment
+  (testing "a CJK char split across two pipe reads: whole text, whole bytes, honest CID"
+    (async done
+      (sh/start (safe)
+                (emit "const b=Buffer.from('こ');process.stdout.write(b.subarray(0,1));setTimeout(()=>{process.stdout.write(b.subarray(1));setTimeout(()=>process.exit(0),30)},40)")
+                {:repo-root "."
+                 :on-chunk (fn [_ _])
+                 :on-exit (fn [r]
+                            (is (= "こ" (:kuro/stdout r))
+                                "no U+FFFD replacement chars leaked into the text")
+                            (is (= 3 (:kuro/stdout-bytes r))
+                                "byte count is the real 3 bytes of U+3053, not 3-6 of U+FFFD")
+                            (is (= (cid/text-cid "こ") (:kuro/stdout-cid r))
+                                "the CID hashes the child's real bytes, not the corrupted ones")
+                            (done))
+                            }))))
+
 (deftest streaming-clock-is-injectable
   ;; README (“The same guarantees apply”) and stream-node's ns docstring
   ;; document `:now` as an opts key of start; the sync provider pins that a
