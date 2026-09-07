@@ -231,3 +231,50 @@
       (is (= ["repo/write"]
              (:kuro/missing (t/denial sess ["repo/write"])))
           "denial keys off capabilities, not the command"))))
+
+(deftest mode-predicate-is-the-declared-scope-membership-test
+  ;; t/mode? is the model-side guard behind t/session's "unknown terminal mode"
+  ;; throw, but the predicate itself has no direct test (only the throwing call
+  ;; path was pinned, in host-terminal-requires-signed-opt-in / declared-modes).
+  ;; It is the one public function deciding *which* modes exist, and a
+  ;; regression that under-accepts a declared mode -- say :terminal-build stopped
+  ;; being in terminal-modes -- would surface only as "why did my build session
+  ;; throw", and only for the caller who happened to hit it. Pin the membership
+  ;; boundary directly: every row of the README mode table must answer true and
+  ;; nothing outside the table may.
+  (testing "every declared mode (the README table rows) is a member"
+    (is (t/mode? :terminal-repo))
+    (is (t/mode? :terminal-build))
+    (is (t/mode? :terminal-agent))
+    (is (t/mode? :terminal-host)))
+  (testing "no safety-claiming or unknown mode is a member"
+    (is (not (t/mode? :terminal-safe)))
+    (is (not (t/mode? :wat))))
+  (testing "a non-keyword is never a mode -- modes are keywords"
+    (is (not (t/mode? "terminal-repo")))
+    (is (not (t/mode? nil)))))
+
+(deftest command-argv-predicate-accepts-exactly-a-non-empty-string-vector
+  ;; t/command-argv? is the guard behind t/command's throws, but the predicate
+  ;; itself is only ever exercised through the throwing constructors -- a
+  ;; regression that starts accepting a *string* command would still fail the
+  ;; existing command-* tests (good), but one that starts *rejecting* a valid
+  ;; argv would not: the constructors' happy paths test command->argv, not the
+  ;; boundary the model promises ("a non-empty vector of non-blank strings").
+  ;; Pin the acceptance boundary directly so the shape contract lives in the
+  ;; predicate's own test, on both runtimes (pure .cljc => parity).
+  (testing "accepts exactly the declared shape"
+    (is (t/command-argv? ["echo" "hi"]))
+    (is (t/command-argv? ["true"])))
+  (testing "the model's shell-interpolation refusal starts here -- a string is not argv"
+    (is (not (t/command-argv? "true && rm -rf /")))
+    (is (not (t/command-argv? "echo hi"))))
+  (testing "non-vector collections are not argv"
+    (is (not (t/command-argv? '("echo" "hi")))))
+  (testing "empty argv is refused -- nothing to run"
+    (is (not (t/command-argv? []))))
+  (testing "blank or non-string elements are refused"
+    (is (not (t/command-argv? ["echo" ""])))
+    (is (not (t/command-argv? ["echo" "  "])))
+    (is (not (t/command-argv? ["echo" nil])))
+    (is (not (t/command-argv? ["echo" 42])))))
