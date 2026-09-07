@@ -278,3 +278,27 @@
     (is (not (t/command-argv? ["echo" "  "])))
     (is (not (t/command-argv? ["echo" nil])))
     (is (not (t/command-argv? ["echo" 42])))))
+
+(deftest receipt-passes-through-declared-digest-keys
+  ;; README: a receipt is a fixed shape; receipt's docstring documents the
+  ;; host-supplied digests it will keep — "may include digest fields such as
+  ;; :stdout-cid, :stderr-cid, or :patch-cids in result". Of those,
+  ;; :patch-cids was declared in select-keys (terminal.cljc) and named in the
+  ;; docstring but had **zero** test coverage and no host provider passes it —
+  ;; a regression that dropped it from select-keys would pass the whole green
+  ;; suite while silently breaking the documented contract (a host that
+  ;; records a patch's resulting CIDs would have them stripped from the
+  ;; ledger). Pin that all three named digests survive the namespacing.
+  (testing "stdout-cid / stderr-cid / patch-cids all arrive namespaced :kuro/*"
+    (let [r (t/receipt (t/session "s1" "cid:repo" :terminal-repo)
+                       (t/command ["true"])
+                       {:exit-code 0
+                        :stdout-cid "bafkrei/stdout"
+                        :stderr-cid "bafkrei/stderr"
+                        :patch-cids ["bafkrei/p1" "bafkrei/p2"]})]
+      (is (= "bafkrei/stdout" (:kuro/stdout-cid r)))
+      (is (= "bafkrei/stderr" (:kuro/stderr-cid r)))
+      (is (= ["bafkrei/p1" "bafkrei/p2"] (:kuro/patch-cids r))
+          "a host that records patch CIDs keeps them, they are not dropped")
+      (is (nil? (:patch-cids r)) "the bare key is gone — one namespace")
+      (is (nil? (:kuro/patch-cids-typo r)) "no silently-renamed sibling"))))
