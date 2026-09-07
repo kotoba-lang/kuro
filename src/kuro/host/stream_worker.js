@@ -38,12 +38,19 @@ async function instantiateGuest(guestUrl) {
 
 function readChunk(memory, ptr) {
   const mem = new Uint8Array(memory.buffer);
-  let text = "";
-  for (let i = ptr; i < mem.length; i++) {
-    if (mem[i] === 0) break;
-    text += String.fromCharCode(mem[i]);
+  // The guest wrote UTF-8 text bytes; decode them as such. Building the
+  // string with String.fromCharCode per byte would mangle every non-ASCII
+  // character (each UTF-8 byte becomes its own Latin-1 code point) - the
+  // same class of bug fixed in kuro.host.stream-node's pipe path (#96).
+  let end = ptr;
+  while (end < mem.length && mem[end] !== 0) end++;
+  try {
+    return new TextDecoder("utf-8").decode(mem.slice(ptr, end));
+  } catch (e) {
+    // No TextDecoder in this host - fall back to per-byte so we never drop
+    // bytes; matches the pre-fix behaviour for pure-ASCII guests.
+    return String.fromCharCode.apply(null, mem.slice(ptr, end));
   }
-  return text;
 }
 
 async function handleStart(payload, startedAt) {
