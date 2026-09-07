@@ -117,6 +117,18 @@
                            (.kill proc "SIGKILL")
                            (finish! {:exit-code 124 :timed-out? true})))
                        ms))]
+          ;; Node's spawned stdout/stderr emit `'data'` as raw Buffers whose
+          ;; boundaries are OS **pipe bytes, not character-aligned**. A real
+          ;; build can let a multibyte (CJK) char straddle two read chunks;
+          ;; decoding each Buffer independently (.toString "utf8") turns the
+          ;; partial bytes into U+FFFD replacement chars, so the streaming
+          ;; stdout text, the byte count, and the CID (hashed over the
+          ;; corrupted text) all silently diverge from what the child wrote.
+          ;; setEncoding installs a StringDecoder that holds partial code
+          ;; points across chunks -- take-chunk! then only ever sees whole
+          ;; characters (chunk: text stays a decoded string).
+          (.setEncoding (.-stdout proc) "utf8")
+          (.setEncoding (.-stderr proc) "utf8")
           (.on (.-stdout proc) "data" (take-chunk! :stdout))
           (.on (.-stderr proc) "data" (take-chunk! :stderr))
           ;; 子の stdin に error リスナを張っておく。close-stdin (`.end`) のあとに
