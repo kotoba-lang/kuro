@@ -28,6 +28,22 @@
     (is (= "bafkreifzjut3te2nhyekklss27nh3k72ysco7y32koao5eei66wof36n5e"
            (cid/text-cid "hello world")))))
 
+(deftest cid-hashes-utf8-bytes-not-characters
+  ;; The enforce row "content-addressed output" promises the CID is the hash of
+  ;; the *UTF-8 byte* sequence the child wrote. The sibling counter test
+  ;; (stream_test's byte-counts-are-utf8-not-characters) records the same trap
+  ;; for byte counters: a character-counting regression is 3x off on Japanese
+  ;; logs while every ASCII test stays green. cid-shape only pins the 59-char
+  ;; shape for non-ASCII ("ünïcode"); a hashing regression (code units, code
+  ;; points, or an encoder re-encode) passes it. Pin an exact vector for a
+  ;; string whose code points are ALL 3-byte CJK, so any wrong-byte hash
+  ;; differs. Computed with sha256(Buffer.from s "utf8") + CIDv1/raw
+  ;; (0x01 0x55 0x12 0x20) - the same construction that reproduces the
+  ;; published "hello world" vector above.
+  (testing "\u3053\u3093\u306b\u3061\u306f = 5 code points / 15 UTF-8 bytes, every byte 3-byte CJK"
+    (is (= "bafkreiasllvn6j5qiwnyoygbhi6ybejn7kfidjucmgig6ygyp5fae2denq"
+           (cid/text-cid "\u3053\u3093\u306b\u3061\u306f")))))
+
 (deftest cid-shape
   (testing "the 0x01 0x55 0x12 0x20 header always renders as bafkrei…"
     (doseq [s ["" "ok\n" "a longer body with ünïcode"]]
