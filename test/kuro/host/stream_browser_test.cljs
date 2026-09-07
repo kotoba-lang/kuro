@@ -171,3 +171,33 @@
           _ (@emit)]
       (is (= 7 (:kuro/exit-code @exit-receipt))
           "the guest is NOT cut short by an (unenforceable) deadline — it ended itself"))))
+
+(deftest caller-max-output-bytes-caps-the-guest-and-records-it
+  ;; stream-browser/start docstring lists `:max-output-bytes` as a public
+  ;; option wired into `stream/open`. The Node providers pin their cap tests on
+  ;; both sides (node_test and stream_node_test cover the flood + truncation +
+  ;; the dropped-byte accounting). This host accepts the same option but had NO
+  ;; test wiring it through: if the `cond->` in `start` silently stopped
+  ;; forwarding the caller's cap, the browser would just fall back to the 1 MiB
+  ;; default and a receipt would claim a bound nobody asked for. Pin that the
+  ;; supplied cap reaches `stream/open` and that a guest flooding past it is
+  ;; recorded, not silently cut (kuro.stream's own rule: a silently-cut receipt
+  ;; is indistinguishable from a short success).
+  (let [exit-receipt (atom nil)
+        flood (apply str (repeat 40 "x"))
+        replies [{"kuro.stream/type" "chunk" "kuro.stream/stream" "stdout"
+                  "kuro.stream/text" flood}
+                 {"kuro.stream/type" "exit" "kuro.stream/exit-code" 0}]
+        emit (atom nil)
+        _ (sb/start sess guest
+                    {:make-worker (make-worker-fn replies nil emit)
+                     :max-output-bytes 8
+                     :on-exit (fn [r] (reset! exit-receipt r))})
+        _ (@emit)]
+    (testing "the caller's cap, not the 1 MiB default, bounds the guest"
+      (is (true? (:kuro/truncated? @exit-receipt))
+          "the cap fired - truncation is on the record, not omitted")
+      (is (= 40 (:kuro/dropped-bytes @exit-receipt))
+          "the bytes dropped past the cap are counted, not hidden")
+      (is (empty? (:kuro/stdout @exit-receipt))
+          "the kept stream is an exact prefix of what was emitted (empty here)"))))
