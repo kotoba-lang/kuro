@@ -329,3 +329,27 @@
         ;; if the write crashed the host as an unhandled error, this test would
         ;; die before on-exit/done -- passing proves the write degraded instead.
         ))))
+
+(deftest stderr-flood-triggers-the-cap-and-the-kill
+  (testing "README 'the cap is enforced across both streams together' - the
+            pure model pins the joining (stream_test: cap-counts-both-streams),
+            but the *provider* must wire it: take-chunk! checks the cap on the
+            stderr path too, or a child that floods only stderr bypasses the
+            kill and melts time instead of being cut. Every existing host
+            flood test emits on stdout only, so a regression to the stdout
+            path alone would pass all of them. exit 125 + truncated? prove the
+            stderr flood was cut, not left running."
+    (async done
+      (sh/start (safe)
+                (emit "setInterval(()=>process.stderr.write('x'.repeat(8192)), 1)")
+                {:repo-root "." :max-output-bytes 4096 :timeout-ms 5000
+                 :on-exit (fn [r]
+                            (is (= 125 (:kuro/exit-code r)))
+                            (is (true? (:kuro/truncated? r)))
+                            (is (pos? (:kuro/dropped-bytes r)))
+                            (is (<= (:kuro/stderr-bytes r) 4096)
+                                "the kept stderr body never exceeds the cap")
+                            (is (= 0 (:kuro/stdout-bytes r))
+                                "nothing was written to stdout")
+                            (done))}))))
+
