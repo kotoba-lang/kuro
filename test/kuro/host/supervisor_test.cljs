@@ -2,6 +2,7 @@
   "async テスト。cljs.test の async を使い、コールバックが呼ばれたことを必ず
   確認する (呼ばれなければタイムアウトで落ちる)。"
   (:require [cljs.test :refer [deftest is testing async]]
+            [clojure.string :as str]
             [kuro.host.supervisor :as sup]
             [kuro.terminal :as t]))
 
@@ -212,3 +213,43 @@
       (testing "no implicit window is created under the session name"
         (is (nil? (get-in (sup/registry s)
                           [:kuro.registry/attachments "build"])))))))
+
+(deftest live-kill-terminates-and-records-state-and-receipt
+  ;; sup/kill! の live 分岐 (docstring: "live な子 (name) を止める (SIGTERM)。
+  ;; 子が終わると on-exit が registry の stream を finished にし、receipt を
+  ;; 保存する") は、既存の kill-on-a-restored-session-closes-without-a-receipt
+  ;; が pin する reverse (restored / handle-less) と対になる正の半分が無い。
+  ;; snapshot-restore-is-honest と killed-on-restored は `(sup/kill! live
+  ;; "build")` を呼ぶが、その 2 箇所は after の状態 (:exited か、receipt が
+  ;; 保存されたか) を一度も検証せずに `(done)` する — supervisor の live
+  ;; 終了経路 (kill! -> (:kill h) -> SIGTERM -> on-exit -> registry finished
+  ;; + receipt 保存) が落ちても全 suite は緑。このテストを塞ぐ:
+  (async done
+    (let [s (sup/new-supervisor)
+          state-snap (atom nil)
+          receipt-snap (atom ::none)
+          exit-snap (atom ::none)]
+      (sup/start! s "build" (safe)
+                  (emit "setInterval(()=>{},1000)")
+                  {:repo-root "."
+                   :on-exit (fn [r] (reset! exit-snap r))})
+      ;; kill once the child is registered and live
+      (js/setTimeout
+       (fn []
+         (sup/kill! s "build")
+         ;; let the SIGTERM propagate: child exits -> on-exit -> registry
+         (js/setTimeout
+          (fn []
+            (reset! state-snap (sup/session-states s))
+            (reset! receipt-snap (sup/receipt-of s "build"))
+            (testing "the live child was terminated: registry marked :exited"
+              (is (= {"build" :exited} @state-snap)))
+            (testing "a receipt was recorded from the on-exit handler"
+              (is (some? @receipt-snap)))
+            (testing "the exit receipt names who stopped it (SIGTERM)"
+              (is (or (str/includes? (str (:kuro/error @exit-snap)) "SIGTERM")
+                      (= 143 (:kuro/exit-code @exit-snap)))))
+            (done))
+          250))
+      50))))
+
