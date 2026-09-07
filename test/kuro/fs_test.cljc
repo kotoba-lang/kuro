@@ -297,3 +297,29 @@
         (is (= :kuro.fs/receipt (:kuro.fs/type (last (fs/receipts st4)))))
         (is (not-any? #(= :kuro.fs/denied (:kuro.fs/type %)) (fs/receipts st5))
             "no op along the way was denied for want of fs/publish")))))
+
+(deftest pre-write-stores-remain-valid-undo-snapshots
+  ;; README (kuro.fs 節):「Writes are immutable — every write produces a new
+  ;; root, so undo is remembering a previous root」。既存の write/list テストは
+  ;; すべて戻り値の新しい st' を先へ繋いで進む —「write 前の old store が
+  ;; 前の root として読み直せるままである (undo = その store 値を保持するだけ)」
+  ;; という README の約束を pin するテストが無い。overwrite-produces-new-
+  ;; store-value は content-addressing (同じ bytes → 同じ cid) だけを見ており、
+  ;; write が万一呼び出し側の store を in-place に書き換える実装に退化しても
+  ;; 全 suite は緑のまま壊れる。古い store を「その時点の root」として読み直
+  ;; せることごと固定する。
+  (let [blocks (atom {})
+        st0 (fs/store)
+        [st1] (fs/write st0 "a.txt" some-bytes (fake-put blocks))
+        [st2] (fs/write st1 "b.txt" some-bytes (fake-put blocks))]
+    (testing "each write returns a distinct new store value, not a mutation"
+      (is (not (identical? st0 st1)))
+      (is (not (identical? st1 st2))))
+    (testing "a previous root still reads the tree as of that write (undo = keep the old store)"
+      (let [[_ l0] (fs/ls st0 ".")]
+        (is (= [] (mapv :name l0)) "st0 is still the empty first root"))
+      (let [[_ l1] (fs/ls st1 ".")]
+        (is (= ["a.txt"] (mapv :name l1)) "st1 still shows a.txt only, not the later b.txt"))
+      (let [[_ l2] (fs/ls st2 ".")]
+        (is (= ["a.txt" "b.txt"] (mapv :name l2)) "st2 is the newest root")))))
+
