@@ -10,6 +10,7 @@
 
 (ns run-host-tests
   (:require [cljs.test :as test]
+            [clojure.string :as str]
             [kuro.host.limits-test]
             [kuro.host.node-test]
             [kuro.host.opfs-test]
@@ -43,6 +44,43 @@
    'kuro.host.stream-node-test 29
    'kuro.host.supervisor-test 9})
 
+;; ---------------------------------------------------------------------------
+;; Namespace drift guard — the host-side mirror of run_parity_tests.cljs's
+;; `assert-model-namespaces-in-sync!` (#102). The parity runner got a guard
+;; that refuses to drift between the namespaces it lists and the `.cljc` model
+;; test files under test/kuro/; the host runner only protects against a
+;; *dropped deftest* (the count map above), not against a whole dropped file.
+;;
+;; A new `test/kuro/host/*_test.cljs` that is forgotten here would run on
+;; NEITHER JVM (which only auto-discovers `.cljc` model tests, not `.cljs` host
+;; tests) NOR nbb — a test that never runs on any runtime while the gates stay
+;; green. That is the same silent-half-green failure class CLAUDE.md names
+;; (2026-08-03: kuro.ansi green on JVM, never run where the consumer lives).
+;; This guard turns "added a host test file and forgot to wire it up" into a
+;; hard, named CI failure.
+(defn- host-test-namespaces
+  "The set of host test namespaces actually present under test/kuro/host/."
+  []
+  (let [fs (js/require "node:fs")
+        dir (str (js/process.cwd) "/test/kuro/host")]
+    (->> (js->clj (.readdirSync fs dir))
+         (filter #(.endsWith % "_test.cljs"))
+         (map (fn [f] (symbol (str "kuro.host."
+                                  (str/replace (subs f 0 (- (count f) 5)) "_" "-")))))
+         (into #{}))))
+
+(defn- assert-host-namespaces-in-sync!
+  []
+  (let [required (set (keys deftest-count))
+        present  (host-test-namespaces)]
+    (when (not= required present)
+      (println "HOST-NAMESPACE-DRIFT"
+               "run_host_tests requires" (sort required)
+               "but test/kuro/host has test files" (sort present)
+               "- a host test is running on no runtime. Add it to the require"
+               "list AND deftest-count so the runner exercises it.")
+      (set! (.-exitCode js/process) 1))))
+
 (defn- registered-deftests
   [ns-sym]
   (count (filter (fn [[_ v]] (:test (meta v)))
@@ -60,6 +98,7 @@
                  "trusting this gate.")
         (set! (.-exitCode js/process) 1)))))
 
+(assert-host-namespaces-in-sync!)
 (assert-deftests-registered!)
 
 (defmethod test/report [::test/default :end-run-tests] [m]
