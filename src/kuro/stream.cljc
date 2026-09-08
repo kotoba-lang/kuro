@@ -63,7 +63,10 @@
   "出力の一片を積む。chunk: `{:stream :stdout|:stderr :text \"…\"}`。
 
   上限を超えた分は**本文を捨てて数だけ残す**。落とした事実が receipt に出ない
-  切り詰めは、成功した短い出力と見分けが付かない。"
+  切り詰めは、成功した短い出力と見分けが付かない。truncated? に一度なったら
+  以後の本文は**一切積まない** —— 残り枠へ収まる後続 chunk を再び積むと kept が
+  出力の exact prefix でなくなり、README の「what is kept is always an exact prefix of the
+   emitted output」保証を破る。"
   [st {:keys [stream text] :as chunk}]
   (when-not (#{:stdout :stderr} stream)
     (throw (ex-info "chunk stream must be :stdout or :stderr" {:chunk chunk})))
@@ -71,14 +74,16 @@
     (throw (ex-info "cannot append to a finished stream"
                     {:state (:kuro/state st) :session-id (:kuro/session-id st)}))
     (let [n (byte-count text)
+          already? (:kuro/truncated? st)
           room (max 0 (- (:kuro/max-output-bytes st) (total-bytes st)))
-          keep? (<= n room)]
+          keep? (and (not already?) (<= n room))
+          over? (and (not already?) (not (<= n room)))]
       (cond-> st
         true (update :kuro/seq inc)
-        true (update (if (= :stdout stream) :kuro/stdout-bytes :kuro/stderr-bytes) + (if keep? n 0))
+        keep? (update (if (= :stdout stream) :kuro/stdout-bytes :kuro/stderr-bytes) + n)
         keep? (update :kuro/chunks conj (assoc chunk :kuro/seq (:kuro/seq st)))
-        (not keep?) (assoc :kuro/truncated? true)
-        (not keep?) (update :kuro/dropped-bytes + n)))))
+        (not keep?) (update :kuro/dropped-bytes + n)
+        over? (assoc :kuro/truncated? true)))))
 
 (defn text-of
   "積まれた chunk を、そのストリームの連結テキストに畳む。"
