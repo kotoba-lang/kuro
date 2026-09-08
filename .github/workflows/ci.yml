@@ -94,3 +94,26 @@ jobs:
         run: npx nbb -cp test/browser test/browser/verify_fs_browser.cljs
       - name: Stream Worker-convergence E2E (guest runs inside the Worker)
         run: npx nbb -cp test/browser test/browser/verify_stream_worker.cljs
+
+      # The parity runner (test/run_parity_tests.cljs) and host runner
+      # (test/run_host_tests.cljs) each carry a namespace-drift guard: a test
+      # file that is never required runs nowhere yet stays green everywhere —
+      # the silent-half-green class CLAUDE.md names. The browser E2Es have no
+      # runner; each verify_*.cljs above is a standalone nbb script listed as
+      # its own step, so the same drift needs an explicit gate here. A
+      # verify_*.cljs that exists in test/browser but has no step in this job
+      # is a claim nobody runs (the failure mode this job exists to prevent) —
+      # nothing else in kuro's CI would execute it.
+      - name: "Guard: every verify_*.cljs is wired into browser-e2e"
+        run: |
+          set -euo pipefail
+          cd test/browser
+          ls verify_*.cljs | sort > /tmp/verify_actual.txt
+          printf '%s\n' verify_opfs_browser.cljs verify_guest_fs_cap.cljs \
+            verify_stream_browser.cljs verify_fs_browser.cljs \
+            verify_stream_worker.cljs | sort > /tmp/verify_wired.txt
+          if ! diff -q /tmp/verify_wired.txt /tmp/verify_actual.txt >/dev/null; then
+            echo "BROWSER-VERIFY-DRIFT: a verify_*.cljs is present but not wired into browser-e2e"
+            diff /tmp/verify_wired.txt /tmp/verify_actual.txt
+            exit 1
+          fi
