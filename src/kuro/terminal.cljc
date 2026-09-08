@@ -1,5 +1,5 @@
 (ns kuro.terminal
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 (def isolation-none
   "この repo が提供する隔離の実態。

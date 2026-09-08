@@ -26,7 +26,7 @@
   `finish` は orphaned な stream にも使える（exit code が分からないので
   host が `{:exit-code 129 :error \"...\"}` のような値を入れる）—— 落ちた実行を
   receipt にして閉じられないと、台帳に開きっぱなしの穴が残る。"
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [kuro.stream :as stream]))
 
 (def format-version 1)

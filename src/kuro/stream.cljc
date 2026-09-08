@@ -27,7 +27,7 @@
   効くが、**畳んだ側の総量**はここでしか分からない（stdout と stderr の合計、
   複数 chunk にまたがる分）。超えたら `:kuro/truncated?` を立てて以後の本文を
   捨て、**捨てたバイト数を数える** —— 黙って切ると receipt が嘘をつく。"
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [kuro.terminal :as t]))
 
 (def default-max-output-bytes (* 1024 1024))

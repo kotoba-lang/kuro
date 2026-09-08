@@ -37,7 +37,7 @@
 
   Mirroring `kuro.terminal/receipt`: host- or caller-supplied extras are
   dropped, everything lands in `:kuro.fs/*`."
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 (defn- byte-count
   "Length of a byte container on either runtime. JVM byte-arrays use alength;
