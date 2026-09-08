@@ -28,7 +28,7 @@
 ;; All six parity namespaces are 100% today; the guard pins that they stay so.
 (def deftest-count
   {'kuro.ansi-test 14
-   'kuro.checkpoint-test 14
+   'kuro.checkpoint-test 15
    'kuro.fs-test 13
    'kuro.session-test 12
    'kuro.stream-test 10

@@ -147,6 +147,29 @@
     (is (= ["aaaa" "bb"] (mapv :text (:kuro/chunks c))))
     (is (= 6 (:kuro.checkpoint/dropped-bytes c)))))
 
+(deftest byte-cap-counts-bytes-not-characters
+  ;; Issue #106: `:max-chunk-bytes` の切詰めは (count) = 文字数だったので、日本語の
+  ;; 出力では dropped-bytes が最大 3 倍小さく出て、restore した receipt が
+  ;; kept_bytes + dropped_bytes = stdout-bytes を満たさなかった。kuro.stream の
+  ;; byte-count (この名前空間が「count は文字数で日本語で 3 倍ずれる——」と
+  ;; 警告しているその byte-count) で切り、char 境界を裂かない (壊れたコード
+  ;; ポイントを保存先に置かない) ことが fix。reconcile 不変量を実テキストで pin する。
+  (let [st (-> (stream/open (sess) (cmd))
+               (stream/append-chunk {:stream :stdout :text "こんにちは"}))  ; 5 chars = 15 UTF-8 bytes
+        cp (cp/->edn st {:max-chunk-bytes 4})]
+    (testing "cap は byte で、切れ目は char 境界"
+      (is (= "こ" (:text (first (:kuro/chunks cp)))) "「ん」は 3+3=6 > 4 で入らない")
+      (is (= 1 (count (:kuro/chunks cp)))))
+    (testing "dropped は切り落とした**バイト**数: 15 - 3 = 12"
+      (is (= 12 (:kuro.checkpoint/dropped-bytes cp)))
+      (is (= 15 (:kuro/stdout-bytes cp)) "pre-truncation の byte 真実は保たれる"))
+    (testing "復元した receipt は reconcile する: kept_bytes + dropped_bytes = stdout-bytes"
+      (let [back (cp/restore cp)
+            r    (cp/abandon back)]
+        (is (= "こ" (:kuro/stdout r)))
+        (is (= 12 (:kuro/dropped-bytes r)))
+        (is (= 15 (+ (stream/byte-count (:kuro/stdout r)) (:kuro/dropped-bytes r))))))))
+
 (deftest an-unknown-version-is-refused
   (testing "a checkpoint from a future format must not be silently misread"
     (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
@@ -172,12 +195,12 @@
     (is (re-find #"\[running\]" s)
         "base line is unchanged -- the suffix is an addition, not a replacement")
     (is (re-find #"\(checkpoint dropped \d+B\)" s)))
-  (testing "the exact count: cp/->edn の cap は文字数 (count) で切る"
-    ;; running-stream = stdout "compiling…\n" (11 chars) + stderr "warn\n"
-    ;; (5 chars)。cap 4 → 最初の chunk から 7 文字切れて "comp" が残り、
-    ;; 2 つ目は丸ごと落ちる → 7 + 5 = 12。checkpoint 層は stream 層と違い
-    ;; byte でなく (count) 文字数で切る -- その事実ごと pin する。
-    (is (re-find #"\(checkpoint dropped 12B\)"
+  (testing "the exact count: cp/->edn の cap は UTF-8 **byte** で切る"
+    ;; running-stream = stdout "compiling…\n" (9 ASCII + "…"=3B + "\n" = 13 bytes)
+    ;; + stderr "warn\n" (5 bytes)。cap 4 → 最初の chunk から "comp" (4 bytes) を
+    ;; 残し 9 bytes 切り落とし、2 つ目は丸ごと落ちる → 9 + 5 = 14。
+    ;; Issue #106: 以前は (count) 文字数で切っていた (12B) が、日本語で byte と
+    (is (re-find #"\(checkpoint dropped 14B\)"
                  (cp/summary (cp/->edn (running-stream) {:max-chunk-bytes 4})))))
   (testing "the untruncated case has no suffix"
     (is (not (re-find #"checkpoint dropped"

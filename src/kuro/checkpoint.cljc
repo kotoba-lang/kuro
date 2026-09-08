@@ -34,11 +34,24 @@
 (defn- chunk->edn [c]
   (select-keys c [:stream :text :kuro/seq]))
 
+(defn- cut-to-bytes
+  "text を高々 n バイトの UTF-8 に切り詰める。マルチバイト文字を途中で裂かない
+  (char 境界で切る —— 壊れたコードポイントを保存先に置かない)。戻り [kept cut]:
+  kept は保持した先頭文字、cut は切り落とした**バイト**数 (kept+cut = text の全バイト)。"
+  [text n]
+  (loop [i 0 kept-bytes 0]
+    (if (< i (count text))
+      (let [nb (stream/byte-count (subs text i (inc i)))]
+        (if (<= (+ kept-bytes nb) n)
+          (recur (inc i) (+ kept-bytes nb))
+          [(subs text 0 i) (- (stream/byte-count text) kept-bytes)]))
+      [(subs text 0 i) (- (stream/byte-count text) kept-bytes)])))
+
 (defn ->edn
   "stream を保存できる EDN 値にする。
 
-  opts `:max-chunk-bytes` を渡すと本文をそこまでに切り詰め、切った量を
-  `:kuro.checkpoint/dropped-bytes` に記録する（**黙って切らない**）。
+  opts `:max-chunk-bytes` を渡すと本文をそこまでに（UTF-8 **byte** で、char 境界を
+  裂かない）切り詰め、切った**バイト**数を `:kuro.checkpoint/dropped-bytes` に記録する（**黙って切らない**）。
   既定は切らない —— 切るかどうかは保存先の都合であって、この層の既定では
   ない。"
   ([st] (->edn st {}))
@@ -48,14 +61,15 @@
          [chunks dropped]
          (if-not cap
            [chunks 0]
-           (reduce (fn [[acc dropped] c]
-                     (let [n (count (:text c))
-                           room (max 0 (- cap (reduce + 0 (map (comp count :text) acc))))]
-                       (cond
-                         (<= n room) [(conj acc c) dropped]
-                         (pos? room) [(conj acc (update c :text subs 0 room)) (+ dropped (- n room))]
-                         :else [acc (+ dropped n)])))
-                   [[] 0] chunks))]
+          (reduce (fn [[acc dropped] c]
+                    (let [n (stream/byte-count (:text c))
+                          room (max 0 (- cap (reduce + 0 (map (comp stream/byte-count :text) acc))))]
+                      (cond
+                        (<= n room) [(conj acc c) dropped]
+                        (pos? room) (let [[kept cut] (cut-to-bytes (:text c) room)]
+                                      [(conj acc (assoc c :text kept)) (+ dropped cut)])
+                        :else [acc (+ dropped n)])))
+                  [[] 0] chunks))]
      (cond-> {:kuro.checkpoint/version format-version
               :kuro.checkpoint/state (:kuro/state st)
               :kuro/session (:kuro/session st)
