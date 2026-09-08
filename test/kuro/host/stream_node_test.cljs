@@ -498,3 +498,24 @@
                               (is (= 250 (:kuro/duration-ms r)))
                               (done))})))))
 
+(deftest deadline-with-output-does-not-crash-the-host
+  (async done
+    (sh/start (safe)
+              (emit "setInterval(()=>process.stdout.write('x'.repeat(8192)),2)")
+              {:repo-root "." :timeout-ms 100
+               :on-chunk (fn [_ _] nil)
+               :on-exit (fn [r]
+                          (is (= 124 (:kuro/exit-code r)))
+                          (is (true? (:kuro/timed-out? r)))
+                          (is (nil? (:kuro/truncated? r)))
+                          ;; a flood child hit by the deadline: the provider stops it with a
+                          ;; timeout receipt;any stdout data already buffered at SIGKILL
+                          ;; lands es delivered to take-chunk! AFTER finish! -- if it
+                          ;; called append-chunk on the :exited stream it throws,and the
+                          ;; uncaught exception inside the stdout EventEmitter kills the
+                          ;; host exactly like the existing write-after-close-stdin test
+                          ;; documents. A late data read must degrade to a silent no-op
+                          ;; (`(when (stream/running? @st) ...))`); reaching on-exit/done
+                          ;; here is the proof it did.
+                          (done))})))
+
