@@ -14,6 +14,7 @@
 
 (ns run-parity-tests
   (:require [cljs.test :as test]
+            [clojure.string :as str]
             [kuro.ansi-test]
             [kuro.checkpoint-test]
             [kuro.fs-test]
@@ -33,6 +34,34 @@
    'kuro.stream-test 10
    'kuro.terminal-test 17})
 
+(defn- model-test-namespaces
+  "The set of portable `.cljc` model test namespaces actually present under
+  test/kuro/ (host tests under test/kuro/host/ are `.cljs` and do not match the
+  `_test.cljc` filter). JVM's cognitect.test-runner auto-discovers every such
+  namespace on the classpath; this runner instead lists them by hand above. If a
+  new portable test file is added and forgotten here, it will run on JVM but be
+  silently skipped by parity - the exact silent-half-green failure class
+  CLAUDE.md names (2026-08-03: kuro.ansi green on JVM, never run on cljs)."
+  []
+  (let [fs (js/require "node:fs")
+        dir (str (js/process.cwd) "/test/kuro")]
+    (->> (js->clj (.readdirSync fs dir))
+         (filter #(.endsWith % "_test.cljc"))
+         (map (fn [f] (symbol (str "kuro." (str/replace (subs f 0 (- (count f) 5)) "_" "-")))))
+         (into #{}))))
+
+(defn- assert-model-namespaces-in-sync!
+  []
+  (let [required (set (keys deftest-count))
+        present  (model-test-namespaces)]
+    (when (not= required present)
+      (println "PARITY-NAMESPACE-DRIFT"
+               "run_parity_tests requires" (sort required)
+               "but test/kuro has .cljc model tests" (sort present)
+               "- a portable test is running on only one runtime. Add it to the"
+               "require list AND deftest-count so parity matches JVM.")
+      (set! (.-exitCode js/process) 1))))
+
 (defn- registered-deftests
   [ns-sym]
   (count (filter (fn [[_ v]] (:test (meta v)))
@@ -50,6 +79,7 @@
         (set! (.-exitCode js/process) 1)))))
 
 (assert-deftests-registered!)
+(assert-model-namespaces-in-sync!)
 
 (defmethod test/report [::test/default :end-run-tests] [m]
   (when-not (test/successful? m)
