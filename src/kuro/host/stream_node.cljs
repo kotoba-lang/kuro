@@ -126,6 +126,15 @@
                            (.kill proc "SIGKILL")
                            (finish! {:exit-code 124 :timed-out? true})))
                        ms))]
+          ;; Publish the deadline handle so take-chunk! can actually disarm it
+          ;; when the output cap stops the run. Prior to this, `timer-ref` was
+          ;; never written -- the `(when-let [t @timer-ref] (js/clearTimeout t))`
+          ;; in take-chunk! was dead code, so the #97 "disarm on truncation" fix
+          ;; never actually ran: only the close/error handlers cleared the timer,
+          ;; and the SIGKILL -> close window could still let a firing deadline
+          ;; relabel a capped run as timed-out (exit 124). take-chunk! only runs
+          ;; after spawn emits 'data', by which time this reset has happened.
+          (reset! timer-ref timer)
           ;; Node's spawned stdout/stderr emit `'data'` as raw Buffers whose
           ;; boundaries are OS **pipe bytes, not character-aligned**. A real
           ;; build can let a multibyte (CJK) char straddle two read chunks;
