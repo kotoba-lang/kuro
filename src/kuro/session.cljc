@@ -26,7 +26,7 @@
   ## 純粋
 
   `.cljc`、IO・時計・PRNG 無し。pid / cwd / 時刻は host が値として渡す。"
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [kuro.checkpoint :as cp]
             [kuro.stream :as stream]))
 
