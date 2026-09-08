@@ -85,19 +85,27 @@
               take-chunk!
               (fn [stream-kw]
                 (fn [buf]
-                  (let [chunk {:stream stream-kw :text (.toString buf "utf8")}]
-                    (swap! st stream/append-chunk chunk)
-                    (on-chunk @st chunk)
-                    ;; 上限に達したら**こちらから止める**。spawn の maxBuffer と
-                    ;; 違い非同期版は勝手に殺してくれないので、無限に吐く子が
-                    ;; あるとメモリではなく時間だけが溶ける。
-                    (when (and (:kuro/truncated? @st) (not @done?))
-                      ;; close/error と同じく timer も外してから殺す。外さないと
-                      ;; SIGKILL から close までの窓で timeout が先に発火し、実際の
-                      ;; 停止理由は出力上限なのに receipt が exit 124 / timed-out?
-                      ;; を名乗ってしまう。
-                      (when-let [t @timer-ref] (js/clearTimeout t))
-                      (.kill proc "SIGKILL")))))
+                  (when (stream/running? @st)
+                    ;; `finish!`（timeout / error / close 経由）が既に走った
+                    ;; （=state が `:exited` になった）**後**に届いた data は黙って捨てる。
+                    ;; ここで `append-chunk` を呼ぶと throw し、その例外は stdout の
+                    ;; EventEmitter の data ハンドラ内の uncaught になって **host が
+                    ;; 落ちる**（実機: 期限に出力を吐き続ける子 + SIGKILL から
+                    ;; close までの窓）。遅い write が「黙って無視」に落ち着くのと
+                    ;; 同じ哲学 —— 1 回の遅い data で host が死なない。
+                    (let [chunk {:stream stream-kw :text (.toString buf "utf8")}]
+                      (swap! st stream/append-chunk chunk)
+                      (on-chunk @st chunk)
+                      ;; 上限に達したら**こちらから止める**。spawn の maxBuffer と
+                      ;; 違い非同期版は勝手に殺してくれないので、無限に吐く子が
+                      ;; あるとメモリではなく時間だけが溶ける。
+                      (when (and (:kuro/truncated? @st) (not @done?))
+                        ;; close/error と同じく timer も外してから殺す。外さないと
+                        ;; SIGKILL から close までの窓で timeout が先に発火し、実際の
+                        ;; 停止理由は出力上限なのに receipt が exit 124 / timed-out?
+                        ;; を名乗ってしまう。
+                        (when-let [t @timer-ref] (js/clearTimeout t))
+                        (.kill proc "SIGKILL"))))))
               finish!
               (fn [result]
                 (when-not @done?
