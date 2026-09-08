@@ -255,3 +255,26 @@
     (is (= "hi" (:text c)))
     (is (= :stdout (:stream c)))
     (is (not (contains? c :priority)))))
+(deftest max-chunk-bytes-accounting-tracks-a-running-total
+  ;; ->edn の :max-chunk-bytes 切詰めは、kept 全部の byte 数を**毎 chunk 足し直す**
+  ;; 実装 (O(k^2)) だった — chatty な実行の checkpoint 保存で 2 次の時間が溶ける。
+  ;; running total 方式に直しても、issue #106 が pin した reconcile は変わらない:
+  ;; kept-bytes + dropped-bytes == stream の実 byte 総数、かつ kept は cap を
+  ;; 超えない。このテストは fits / partial-cut / whole-drop の 3 分岐全部を
+  ;; >2 chunk で通して、accumulator の byte 会計が壊れていないことを押さえる。
+  (let [st (-> (stream/open (sess) (cmd))
+               (stream/append-chunk {:stream :stdout :text "ab"})         ;; 2B fits
+               (stream/append-chunk {:stream :stdout :text "cd"})         ;; 2B fits  -> 4B
+               (stream/append-chunk {:stream :stdout :text "こんにちは"}) ;; 15B CJK, 3B room -> "こ" kept, 12B cut
+               (stream/append-chunk {:stream :stdout :text "xy"}))        ;; 2B, room 0 -> whole-drop
+        orig (+ (stream/byte-count "ab") (stream/byte-count "cd")
+                (stream/byte-count "こんにちは") (stream/byte-count "xy"))
+        edn (cp/->edn st {:max-chunk-bytes 7})
+        kept (reduce + 0 (map (comp stream/byte-count :text) (:kuro/chunks edn)))]
+    (is (= "abcdこ" (apply str (map :text (:kuro/chunks edn))))
+        "the kept prefix is a character-boundary cut of the real output")
+    (is (<= kept 7) "the kept prefix stays within the byte cap")
+    (is (= 14 (:kuro.checkpoint/dropped-bytes edn))
+        "dropped counts the cut CJK bytes (12) plus the whole-dropped chunk (2)")
+    (is (= orig (+ kept (:kuro.checkpoint/dropped-bytes edn)))
+        "kept-bytes + checkpoint dropped-bytes == the stream's real byte total")))

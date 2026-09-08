@@ -59,17 +59,28 @@
    (let [cap (:max-chunk-bytes opts)
          chunks (mapv chunk->edn (:kuro/chunks st))
          [chunks dropped]
-         (if-not cap
-           [chunks 0]
-          (reduce (fn [[acc dropped] c]
-                    (let [n (stream/byte-count (:text c))
-                          room (max 0 (- cap (reduce + 0 (map (comp stream/byte-count :text) acc))))]
-                      (cond
-                        (<= n room) [(conj acc c) dropped]
-                        (pos? room) (let [[kept cut] (cut-to-bytes (:text c) room)]
-                                      [(conj acc (assoc c :text kept)) (+ dropped cut)])
-                        :else [acc (+ dropped n)])))
-                  [[] 0] chunks))]
+        (if-not cap
+          [chunks 0]
+          ;; 各 chunk ごとに kept 全体の byte 数を**足し直さない** - 旧実装は
+          ;; `(reduce + 0 (map byte-count acc))` を毎 chunk 走らせていて、acc が
+          ;; 伸びるにつれ O(k^2) に劣化する (k = chunk 数)。chatty な実行は
+          ;; 1 MiB 上限内で数万 chunk を積むため、checkpoint 保存 (durability の
+          ;; 経路) のたびに 2 次の時間が溶ける (実測: 20k chunk / 40KB で
+          ;; ->edn 約 2s)。total (kept の byte 総数) を accumulator に載せて
+          ;; 毎回 O(1) にする。切り落としの byte 会計 (`dropped`) は変わらない。
+          (let [[chunks dropped _]
+                (reduce (fn [[acc dropped total] c]
+                          (let [n (stream/byte-count (:text c))
+                                room (max 0 (- cap total))]
+                            (cond
+                              (<= n room) [(conj acc c) dropped (+ total n)]
+                              (pos? room) (let [[kept cut] (cut-to-bytes (:text c) room)]
+                                            [(conj acc (assoc c :text kept))
+                                             (+ dropped cut)
+                                             (- (+ total n) cut)])
+                              :else [acc (+ dropped n) total])))
+                        [[] 0 0] chunks)]
+            [chunks dropped]))]
      (cond-> {:kuro.checkpoint/version format-version
               :kuro.checkpoint/state (:kuro/state st)
               :kuro/session (:kuro/session st)
