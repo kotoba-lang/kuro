@@ -32,9 +32,9 @@
 
 (def default-max-output-bytes (* 1024 1024))
 
-(defn- byte-count
+(defn byte-count
   "UTF-8 バイト数。JVM/JS で同じ数を出す（`count` は文字数なので使えない —— 日本語の
-   ログで 3 倍ずれる）。"
+   ログで 3 倍ずれる）。`kuro.checkpoint` の `:max-chunk-bytes` 切詰めもこれを共有する。"
   [s]
   #?(:clj (alength (.getBytes ^String (str s) "UTF-8"))
      :cljs (.-length (.encode (js/TextEncoder.) (str s)))))
