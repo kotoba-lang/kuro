@@ -210,3 +210,25 @@
   (testing "the untruncated case has no suffix"
     (is (not (re-find #"stream dropped"
                       (cp/summary (cp/->edn (running-stream))))))))
+
+(deftest checkpoint-edn-chunk-shape-is-closed
+  ;; This is the one select-keys site without a shape-closure pin: kuro.terminal
+  ;; (terminal_test receipt-drops-undeclared-result-keys) and kuro.fs
+  ;; (fs_test fs-receipts-are-fixed-shape-and-namespaced) each pin their
+  ;; select-keys discipline; kuro.checkpoint's chunk->edn
+  ;; `(select-keys c [:stream :text :kuro/seq])` had none. append-chunk stores
+  ;; the whole caller chunk (`assoc chunk :kuro/seq`), so a chunk carrying an
+  ;; extra key keeps it in the live stream and silently loses it in the
+  ;; checkpoint EDN -- a reader would see a shape that depends on whether the
+  ;; value happened to pass through checkpoint or not, the exact hazard the
+  ;; select-keys in terminal/fs exist to prevent. Pin the closed shape.
+  (let [st (-> (stream/open (sess) (cmd))
+               (stream/append-chunk {:stream :stdout :text "hi" :priority "high"}))
+        cp (cp/->edn st)
+        c  (first (:kuro/chunks cp))]
+    (is (= 1 (count (:kuro/chunks cp))))
+    (is (= #{:stream :text :kuro/seq} (set (keys c)))
+        "the checkpoint EDN chunk is closed to [:stream :text :kuro/seq] -- the appended :priority is dropped")
+    (is (= "hi" (:text c)))
+    (is (= :stdout (:stream c)))
+    (is (not (contains? c :priority)))))
