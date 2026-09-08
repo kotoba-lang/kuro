@@ -48,6 +48,27 @@
   literal in `start`."
   120000)
 
+(defn deadline-decision
+  "A `:timeout-ms` deadline that elapses AFTER the child has already been
+  observed to exit must not claim `:timed-out?` - the receipt reports the
+  exit code the host actually saw, never a mislabeled 124. `exit-info` is
+  the value recorded by the child's `exit` event (nil until a real exit is
+  observed): `{:code n :signal s}`.
+
+  Pure fn so the precedence contract can be pinned without spawning a
+  process: the deadline claims 124/timed-out ONLY while no exit code is
+  known. In practice the 'exit' handler disarms the timer, so this is the
+  defensive fallback for the residual window where the events nest.
+  Mirrors the 'close' handler's mapping (`some? code` -> real code, else
+  128 + signal)."
+  [exit-info]
+  (if (nil? exit-info)
+    {:exit-code 124 :timed-out? true}
+    (let [code (:code exit-info) signal (:signal exit-info)]
+      (if (some? code)
+        {:exit-code code}
+        {:exit-code 128 :error (str "terminated by " signal)}))))
+
 (defn start
   "`cmd` を非同期に開始する。戻り値は
   `{:stream <atom of kuro.stream> :write fn :kill fn :pid n}`、
@@ -73,6 +94,12 @@
               on-chunk (:on-chunk opts (fn [_ _]))
               on-exit (:on-exit opts (fn [_]))
               done? (atom false)
+              ;; The child's real exit result, recorded by the 'exit' event
+              ;; (which fires with the OS exit code as soon as the process
+              ;; terminates, BEFORE 'close'). The deadline timer consults it
+              ;; so a deadline that elapses after an exit was observed never
+              ;; relabels the run timed-out.
+              exit-info (atom nil)
               ;; 期限 timer のハンドルを、後に繋がれる take-chunk!からも読めるようにする。
               ;; let は後続の繋びを先行の fn 本文には見せないが、
               ;; take-chunk! は spawn 後にしか走らないので、実行時には必ず設定済みの値が見える。
@@ -131,8 +158,13 @@
                       (js/setTimeout
                        (fn []
                          (when-not @done?
-                           (.kill proc "SIGKILL")
-                           (finish! {:exit-code 124 :timed-out? true})))
+                           (let [decision (deadline-decision @exit-info)]
+                             ;; once the child's real exit is known the deadline
+                             ;; is moot - report the truth, never a mislabeled
+                             ;; timeout (#113).
+                             (when (:timed-out? decision)
+                               (.kill proc "SIGKILL"))
+                             (finish! decision))))
                        ms))]
           ;; Publish the deadline handle so take-chunk! can actually disarm it
           ;; when the output cap stops the run. Prior to this, `timer-ref` was
@@ -183,6 +215,18 @@
                     ;; kill されたら signal 名を残す。exit code だけだと
                     ;; 「誰が止めたのか」が receipt から消える。
                     :else {:exit-code 128 :error (str "terminated by " signal)}))))
+          ;; Node emits 'exit' (the OS process terminated; real code+signal
+          ;; known) BEFORE 'close' (stdio fully drained). A grandchild that
+          ;; inherited the pipe keeps close delayed well past exit - if the
+          ;; :timeout-ms deadline elapses in that window and finish!s first, the
+          ;; done? guard makes the real close a no-op and the receipt lies: a run
+          ;; that actually exit(0)'d gets reported 124/:timed-out? (#113). Record
+          ;; the real exit and disarm the deadline: with the child already gone
+          ;; there is no process left to enforce a timeout on.
+          (.on proc "exit"
+               (fn [code signal]
+                 (when timer (js/clearTimeout timer))
+                 (reset! exit-info {:code code :signal signal})))
           {:stream st
            :pid (.-pid proc)
            :write (fn [s]

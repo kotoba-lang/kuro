@@ -41,7 +41,7 @@
    'kuro.host.node-test 24
    'kuro.host.opfs-test 8
    'kuro.host.stream-browser-test 10
-   'kuro.host.stream-node-test  30
+   'kuro.host.stream-node-test  32
    'kuro.host.supervisor-test 9})
 
 ;; ---------------------------------------------------------------------------
