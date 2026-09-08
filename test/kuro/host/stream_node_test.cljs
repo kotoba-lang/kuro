@@ -519,3 +519,47 @@
                           ;; here is the proof it did.
                           (done))})))
 
+
+
+(deftest deadline-does-not-relabel-an-already-exited-child
+  ;; issue #113: the deadline timer fires on a :timeout-ms that elapses in the
+  ;; window between the child's 'exit' event (real exit code known) and the
+  ;; 'close' event (stdio fully drained). A grandchild that inherited the pipe
+  ;; keeps close delayed past the deadline. The deadline must NOT overwrite the
+  ;; real exit code with 124/:timed-out? -- the receipt reports the exit code the
+  ;; host actually saw. With no 'exit' handler the timer wins the done? guard and
+  ;; the receipt lies (exit 0 => 124); the 'exit' handler that records + disarms
+  ;; is what this test guards.
+  (testing "a child that already exit(0)'d before the deadline is reported exit 0, never 124"
+    (async done
+      (sh/start (safe)
+                (emit (str "const{spawn}=require('node:child_process');"
+                           "spawn(process.execPath,['-e','setTimeout(()=>{},1500)'],"
+                           "{stdio:['ignore','inherit','inherit']});"
+                           "process.exit(0)"))
+                {:repo-root "." :timeout-ms 400
+                 :on-exit (fn [r]
+                            (is (= 0 (:kuro/exit-code r))
+                                "the real exit code wins; a firing deadline must not relabel to 124")
+                            (is (nil? (:kuro/timed-out? r)))
+                            (done))}))))
+
+
+(deftest deadline-never-claims-timed-out-after-an-exit-is-observed
+  ;; issue #113's decide-exit contract, pinned as a pure fn (no spawn): the
+  ;; :timeout-ms deadline may claim 124/timed-out? ONLY while no real exit has
+  ;; been observed. Once the child's 'exit' fires with a code, a queued deadline
+  ;; must report the truth, never a mislabeled timeout. This is the policy the
+  ;; e2e test (deadline-does-not-relabel-an-already-exited-child) proves is wired
+  ;; to the real spawn events; this pins each branch so the precedence can't
+  ;; slip under timing.
+  (testing "deadline-decision reports 124/timed-out? only before the exit is known"
+    (is (= {:exit-code 124 :timed-out? true} (sh/deadline-decision nil))
+        "no exit observed yet -> the deadline still legitimately times the run out")
+    (is (= {:exit-code 0} (sh/deadline-decision {:code 0 :signal nil}))
+        "a clean exit 0 wins over a later deadline")
+    (is (= {:exit-code 7} (sh/deadline-decision {:code 7 :signal nil}))
+        "any real code wins, not just 0")
+    (is (= {:exit-code 128 :error "terminated by SIGTERM"}
+           (sh/deadline-decision {:code nil :signal "SIGTERM"}))
+        "a signal death keeps the 128/signal shape, never a timeout")))
