@@ -34,18 +34,56 @@
 (defn- chunk->edn [c]
   (select-keys c [:stream :text :kuro/seq]))
 
+(defn- code-point-at
+  "位置 i にある**完全な** Unicode コードポイントと、その直後の UTF-16 番地を
+  返す (`[cp end]`)。i が末尾を越えていれば nil。
+
+  `.cljc` は文字を UTF-16 コードユニットで数える (`count` / `subs` は
+  サロゲートを 1 文字として扱う)。astral 文字（絵文字・Ext-B・数学記号）は
+  2 ユニットなので、ユニット単位で足すと途中で裂ける。ここでコードポイント
+  単位に進めることで、保存先に孤立サロゲート（壊れたコードポイント）を
+  置かない。"
+  [s i]
+  (when (< i (count s))
+    #?(:clj (let [cp (Character/codePointAt s i)]
+              [cp (+ i (Character/charCount cp))])
+       :cljs (let [cp (.codePointAt s i)]
+               [cp (+ i (if (> cp 0xffff) 2 1))]))))
+
+(defn- codepoint-size
+  "1 個のコードポイントの UTF-8 バイト長。コードポイント値から直接算定する ——
+  `subs` + `stream/byte-count` を**サロゲート片ごとに**呼ぶと、孤立サロゲートを
+  JVM は 1 バイト '?'、cljs (TextEncoder) は 3 バイト U+FFFD に符号化するため
+  runtime で答えが割れる (実測 2026-09-09)。コードポイント値は両 runtime で同じ
+  整数を返すので、この算術は parity 安全。"
+  [cp]
+  (cond (<= cp 0x7f) 1
+        (<= cp 0x7ff) 2
+        (<= cp 0xffff) 3
+        :else 4))
+
 (defn- cut-to-bytes
-  "text を高々 n バイトの UTF-8 に切り詰める。マルチバイト文字を途中で裂かない
-  (char 境界で切る —— 壊れたコードポイントを保存先に置かない)。戻り [kept cut]:
-  kept は保持した先頭文字、cut は切り落とした**バイト**数 (kept+cut = text の全バイト)。"
+  "text を高々 n バイトの UTF-8 に切り詰める。**コードポイント単位**で切る ——
+  マルチバイト文字もサロゲートペア (astral 文字) も途中で裂かない。壊れた
+  コードポイントを保存先に置かない。戻り [kept cut]: kept は保持した先頭
+  (コードポイント境界で切った) 文字列、cut は切り落とした**バイト**数
+  (kept+cut = text の全バイト —— バイト会計は常に総和と一致)。
+
+  旧実装は UTF-16 コードユニット単位で足し、`(subs text i (inc i))` のバイト数を
+  毎回数えていた。astral 文字は 2 ユニットに見えるため、『切らない』はずの
+  cap 境界でサロゲートペアを裂いた (実測: 'a😀b' を cap=4 に切ると cljs =
+  実消費者は孤立サロゲート 'a\\uD83D' を保存し、JVM は 6 バイト全部を保持して
+  cap を超えた —— 同じ入力・同じ cap で runtime ごとに別の byte 列)。"
   [text n]
-  (loop [i 0 kept-bytes 0]
-    (if (< i (count text))
-      (let [nb (stream/byte-count (subs text i (inc i)))]
-        (if (<= (+ kept-bytes nb) n)
-          (recur (inc i) (+ kept-bytes nb))
-          [(subs text 0 i) (- (stream/byte-count text) kept-bytes)]))
-      [(subs text 0 i) (- (stream/byte-count text) kept-bytes)])))
+  (let [total (stream/byte-count text)]
+    (loop [end 0 kept-bytes 0]
+      (if (< end (count text))
+        (let [[cp end'] (code-point-at text end)
+              nb (codepoint-size cp)]
+          (if (<= (+ kept-bytes nb) n)
+            (recur end' (+ kept-bytes nb))
+            [(subs text 0 end) (- total kept-bytes)]))
+        [text (- total kept-bytes)]))))
 
 (defn ->edn
   "stream を保存できる EDN 値にする。
