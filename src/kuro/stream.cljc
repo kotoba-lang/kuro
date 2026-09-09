@@ -98,18 +98,21 @@
   戻り値は `kuro.terminal/receipt`（=これまでと同じ形）。
 
   stdout/stderr の本文と実測バイト数、切り詰めの有無はここで埋める —— host が
-  同じことを二度数えなくてよいように。"
+  同じことを二度数えなくてよいように。host の result が同じ key を持っても
+  **ここで数えた値が勝つ** (host が数え直した値が実測と食い違う時、receipt は
+  実測の側を載せる)。host 固有の key (:started-at, :stdout-cid, :error …) は
+  そのまま通る。"
   [st result]
   (when (not= :running (:kuro/state st))
     (throw (ex-info "stream already finished" {:state (:kuro/state st)})))
   (t/receipt (:kuro/session st) (:kuro/command st)
-             (merge {:stdout (text-of st :stdout)
+             (merge result
+                    {:stdout (text-of st :stdout)
                      :stderr (text-of st :stderr)
                      :stdout-bytes (:kuro/stdout-bytes st)
                      :stderr-bytes (:kuro/stderr-bytes st)}
                     (when (:kuro/truncated? st)
-                      {:truncated? true :dropped-bytes (:kuro/dropped-bytes st)})
-                    result)))
+                      {:truncated? true :dropped-bytes (:kuro/dropped-bytes st)}))))
 
 (defn running? [st] (= :running (:kuro/state st)))
 
