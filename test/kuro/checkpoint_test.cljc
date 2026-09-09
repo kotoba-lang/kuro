@@ -278,3 +278,26 @@
         "dropped counts the cut CJK bytes (12) plus the whole-dropped chunk (2)")
     (is (= orig (+ kept (:kuro.checkpoint/dropped-bytes edn)))
         "kept-bytes + checkpoint dropped-bytes == the stream's real byte total")))
+
+(deftest astral-char-cut-never-splits-a-surrogate-pair
+  ;; :max-chunk-bytes の切詰めは **コードポイント単位**でなければならない。
+  ;; 旧実装 (cut-to-bytes) は UTF-16 コードユニット単位で足し、astral 文字
+  ;; (絵文字 U+1F600 は 2 ユニット = 4 UTF-8 byte) をサロゲートペアの途中で
+  ;; 裂いた —— 実測 (2026-09-09): 'a😀b' を cap=4 に切ると cljs (実消費者 =
+  ;; kobo サーバ) は孤立サロゲート 'a\\uD83D' を保存先に置き (namespace の
+  ;; 文書「壊れたコードポイントを保存先に置かない」を破る)、JVM は 6 byte 全部を
+  ;; 保持して **cap を超えた**。同じ入力・同じ cap で runtime ごとに別の byte 列が
+  ;; 生まれる —— このテストの断言が両 runtime で通ることは、cut-to-bytes が
+  ;; コードポイント値からバイト長を算定する (parity 安全) ことの証明でもある。
+  (let [text "a😀b"]                     ; 1 + 4 + 1 = 6 UTF-8 bytes = 4 code units
+    (doseq [[cap kept'] {1 "a" 2 "a" 3 "a" 4 "a" 5 "a😀" 6 "a😀b"}]
+      (let [st (-> (stream/open (sess) (cmd))
+                   (stream/append-chunk {:stream :stdout :text text}))
+            c (cp/->edn st {:max-chunk-bytes cap})
+            kept (apply str (map :text (:kuro/chunks c)))
+            dropped (:kuro.checkpoint/dropped-bytes c 0)]
+        (testing (str "cap " cap)
+          (is (= kept' kept)
+              "kept is a code-point-aligned prefix — the 4-byte astral char is never half-kept")
+          (is (= 6 (+ (stream/byte-count kept') dropped))
+              "byte accounting still reconciles: kept + dropped == the whole emoji string's bytes"))))))
