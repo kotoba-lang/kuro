@@ -18,7 +18,7 @@
             ["node:path" :as path]
             ["node:fs" :as fs]
             ["playwright" :refer [chromium]]
-            [clojure.string :as str]))
+            [kotoba.lang.text :as str]))
 
 (def repo-root (.cwd js/process))
 (def tmp-dir (.join path repo-root "test" "browser" ".tmp"))

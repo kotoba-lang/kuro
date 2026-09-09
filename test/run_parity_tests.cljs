@@ -14,7 +14,7 @@
 
 (ns run-parity-tests
   (:require [cljs.test :as test]
-            [clojure.string :as str]
+            [kotoba.lang.text :as str]
             [kuro.ansi-test]
             [kuro.checkpoint-test]
             [kuro.fs-test]

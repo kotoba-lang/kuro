@@ -10,7 +10,7 @@
 
 (ns run-host-tests
   (:require [cljs.test :as test]
-            [clojure.string :as str]
+            [kotoba.lang.text :as str]
             [kuro.host.limits-test]
             [kuro.host.node-test]
             [kuro.host.opfs-test]

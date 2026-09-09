@@ -4,7 +4,7 @@
   (filesystem confinement, network) get no test — an assertion that passes
   because nothing tried to violate it is theater."
   (:require [clojure.set :as set]
-            [clojure.string :as str]
+            [kotoba.lang.text :as str]
             [cljs.test :refer [deftest is testing]]
             [kuro.host.cid :as cid]
             [kuro.host.node :as host]

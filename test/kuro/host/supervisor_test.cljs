@@ -2,7 +2,7 @@
   "async テスト。cljs.test の async を使い、コールバックが呼ばれたことを必ず
   確認する (呼ばれなければタイムアウトで落ちる)。"
   (:require [cljs.test :refer [deftest is testing async]]
-            [clojure.string :as str]
+            [kotoba.lang.text :as str]
             [kuro.host.supervisor :as sup]
             [kuro.terminal :as t]))
 
