@@ -48,7 +48,7 @@ jobs:
       # (e4da1c2) — a vendored copy is a fork the moment someone edits it, and
       # test:parity would stay green while comparing two different libraries.
       # Pin the vendored file's sha256; drift fails this job on purpose.
-      - run: nbb scripts/check-text-shim.cljs
+      - run: npx nbb scripts/check-text-shim.cljs
 
   # The browser E2Es (README "Verified end-to-end") ran only on developer
   # machines: shadow-cljs compile + Playwright + wasm-tools were all
