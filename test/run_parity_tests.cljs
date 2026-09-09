@@ -31,7 +31,7 @@
    'kuro.checkpoint-test 17
    'kuro.fs-test 13
    'kuro.session-test 12
-   'kuro.stream-test 10
+   'kuro.stream-test 11
    'kuro.terminal-test 17})
 
 (defn- model-test-namespaces

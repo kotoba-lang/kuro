@@ -121,4 +121,35 @@
                  (stream/append-chunk {:stream :stdout :text "abcd"})
                  (stream/append-chunk {:stream :stdout :text "efg"}))]
       (is (= 4 (stream/total-bytes st)) "the dropped 3 stay in dropped-bytes, not the sum")
-      (is (= 3 (:kuro/dropped-bytes st))))))
+      (is (= 3 (:kuro/dropped-bytes st))))))\n
+(deftest finish-does-not-let-host-result-overwrite-the-measured-truth
+  ;; stream/finish は host の result を**後から** merge していた -- host が
+  ;; :stdout / :stdout-bytes / :truncated? / :dropped-bytes を渡すと、stream が
+  ;; 実測した値を黙って上書きできた。README「a silently-cut receipt is
+  ;; indistinguishable from a short success」と docstring「本文とバイト数と
+  ;; 切詰めの有無はここで埋める」の禁止は host 経路でも守られる必要がある:
+  ;; 切詰められた実行に host が clean な :stdout を渡すと、cap は効いたのに
+  ;; receipt は「成功した短い出力」の顔をする。測定は stream 層の仕事 --
+  ;; host 固有の key (:exit-code :started-at :stdout-cid ...) だけを通す。
+  (testing "a host result carrying conflicting values cannot undo the recorded cut"
+    (let [st (-> (stream/open (sess) (cmd) {:max-output-bytes 4})
+                 (stream/append-chunk {:stream :stdout :text "abcd"})
+                 (stream/append-chunk {:stream :stdout :text "efghij"})
+                 (stream/finish {:exit-code 0
+                                 :stdout "FULL-OUTPUT"
+                                 :stdout-bytes 999
+                                 :truncated? false
+                                 :dropped-bytes 0}))]
+      (is (= "abcd" (:kuro/stdout st)) "the measured kept body wins")
+      (is (= 4 (:kuro/stdout-bytes st)) "the measured byte count wins")
+      (is (true? (:kuro/truncated? st)) "the measured truncation wins")
+      (is (= 6 (:kuro/dropped-bytes st)) "the measured dropped count wins")))
+  (testing "host-specific keys pass through untouched"
+    (let [st (-> (stream/open (sess) (cmd))
+                 (stream/append-chunk {:stream :stdout :text "hi"})
+                 (stream/finish {:exit-code 0 :started-at 10 :stdout-cid "bafkrei/x"}))]
+      (is (= 0 (:kuro/exit-code st)))
+      (is (= 10 (:kuro/started-at st)))
+      (is (= "bafkrei/x" (:kuro/stdout-cid st)))
+      (is (= "hi" (:kuro/stdout st)))
+      (is (= 2 (:kuro/stdout-bytes st))))))
