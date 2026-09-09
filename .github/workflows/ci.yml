@@ -44,6 +44,11 @@ jobs:
       - run: |
           test "$(python3 scripts/cid_mint.py hello)" = "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44yegnrjhc4yeq"
           test "$(python3 scripts/cid_mint.py world)" = "bafkreicin2sgejgrxnh3nahtj56jvwlkr4sozcf6opvi4wtmmuta5hfyu4"
+      # The nbb harness runs a VENDORED copy of the pinned kotoba.lang.text
+      # (e4da1c2) — a vendored copy is a fork the moment someone edits it, and
+      # test:parity would stay green while comparing two different libraries.
+      # Pin the vendored file's sha256; drift fails this job on purpose.
+      - run: npx nbb scripts/check-text-shim.cljs
 
   # The browser E2Es (README "Verified end-to-end") ran only on developer
   # machines: shadow-cljs compile + Playwright + wasm-tools were all
