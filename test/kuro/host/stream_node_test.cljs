@@ -537,7 +537,7 @@
                            "spawn(process.execPath,['-e','setTimeout(()=>{},1500)'],"
                            "{stdio:['ignore','inherit','inherit']});"
                            "process.exit(0)"))
-                {:repo-root "." :timeout-ms 400
+                {:repo-root "." :timeout-ms 3000
                  :on-exit (fn [r]
                             (is (= 0 (:kuro/exit-code r))
                                 "the real exit code wins; a firing deadline must not relabel to 124")

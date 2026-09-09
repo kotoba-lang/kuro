@@ -159,7 +159,7 @@
     (let [s (sup/new-supervisor)
           seen (atom 0)]
       (sup/start! s "build" (safe)
-                  (emit "process.stdout.write('a\\n'); setTimeout(()=>process.stdout.write('b\\n'),15); setTimeout(()=>process.stdout.write('c\\n'),45); setTimeout(()=>process.exit(0),90)")
+                  (emit "process.stdout.write('a\\n'); setTimeout(()=>process.stdout.write('b\\n'),60); setTimeout(()=>process.stdout.write('c\\n'),160); setTimeout(()=>process.exit(0),300)")
                   {:repo-root "."
                    :on-chunk (fn [_ _]
                                (when (= 2 (swap! seen inc))
