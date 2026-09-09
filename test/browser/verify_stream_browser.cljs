@@ -30,7 +30,7 @@
             ["node:fs" :as fs]
             ["node:child_process" :as child-process]
             ["node:http" :as http]
-            [clojure.string :as str]
+            [kotoba.lang.text :as str]
             ["playwright" :refer [chromium]]
 ))
 
@@ -142,7 +142,7 @@ try {
                    (:stdout r)
                    (pos? (count chunks))
                    (= "sum=42" (:text first-chunk))
-                   (not (clojure.string/blank? (:guest r))))]
+                   (not (str/blank? (:guest r))))]
       (report! {:verdict (if ok? "PASS" "FAIL")})
       (when-not ok? (set! (.-exitCode js/process) 1)))))
 

@@ -18,7 +18,7 @@
 ;; touch one without the other and a suite goes red on purpose.
 
 (ns check-text-shim
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 (def fs (js/require "fs"))
 

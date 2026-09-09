@@ -9,7 +9,7 @@
   prove here: the wire contract both sides compile against, and that a CID
   minted the way the Worker mints it matches the reference mint."
   (:require [cljs.test :refer [deftest is testing]]
-            [clojure.string :as str]
+            [kotoba.lang.text :as str]
             [kuro.host.opfs :as opfs]
             [kuro.host.cid :as cid]
             ["node:child_process" :as cproc]))

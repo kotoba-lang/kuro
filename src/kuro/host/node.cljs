@@ -36,7 +36,7 @@
   enough to run untrusted code. `:terminal-host` is refused outright."
   (:require ["node:child_process" :as cp]
             ["node:path" :as path]
-            [clojure.string :as str]
+            [kotoba.lang.text :as str]
             [kuro.host.cid :as cid]
             [kuro.terminal :as t]))
 
