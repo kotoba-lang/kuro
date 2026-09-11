@@ -11,7 +11,7 @@
 ;;
 ;; Run:
 ;;   npx shadow-cljs compile fs-browser
-;;   npx nbb -cp test/browser test/browser/verify_fs_browser.cljs
+;;   npx nbb -cp test/browser test/browser/verify_fs_browser.cljk
 
 (ns verify-fs-browser
   (:require ["node:http" :as http]

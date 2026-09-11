@@ -6,7 +6,7 @@
 ;; run in CI — the model is proved portable, the host is proved to actually
 ;; spawn processes.
 ;;
-;;   nbb --classpath src:test test/run_host_tests.cljs
+;;   nbb --classpath src:test test/run_host_tests.cljk
 
 (ns run-host-tests
   (:require [cljs.test :as test]

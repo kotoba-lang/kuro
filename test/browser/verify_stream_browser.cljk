@@ -23,7 +23,7 @@
 ;;   - the receipt carrying :kuro/isolation :browser-origin
 ;;
 ;; Build:  npx shadow-cljs compile fs-browser   (emits js/stream-browser.js)
-;; Run:    npx nbb -cp test/browser test/browser/verify_stream_browser.cljs
+;; Run:    npx nbb -cp test/browser test/browser/verify_stream_browser.cljk
 
 (ns verify-stream-browser
   (:require ["node:path" :as path]

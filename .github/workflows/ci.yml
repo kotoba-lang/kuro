@@ -48,7 +48,7 @@ jobs:
       # (e4da1c2) — a vendored copy is a fork the moment someone edits it, and
       # test:parity would stay green while comparing two different libraries.
       # Pin the vendored file's sha256; drift fails this job on purpose.
-      - run: npx nbb scripts/check-text-shim.cljs
+      - run: npx nbb scripts/check-text-shim.cljk
 
   # The browser E2Es (README "Verified end-to-end") ran only on developer
   # machines: shadow-cljs compile + Playwright + wasm-tools were all
@@ -83,11 +83,11 @@ jobs:
       - name: Compile the browser build
         run: npx shadow-cljs compile fs-browser
       - name: OPFS round-trip E2E
-        run: npx nbb -cp test/browser test/browser/verify_opfs_browser.cljs
+        run: npx nbb -cp test/browser test/browser/verify_opfs_browser.cljk
       - name: Guest fs capability E2E
-        run: npx nbb -cp test/browser test/browser/verify_guest_fs_cap.cljs
+        run: npx nbb -cp test/browser test/browser/verify_guest_fs_cap.cljk
       - name: Stream browser E2E
-        run: npx nbb -cp test/browser test/browser/verify_stream_browser.cljs
+        run: npx nbb -cp test/browser test/browser/verify_stream_browser.cljk
       # The README "Verified end-to-end" list has five entries; each entry's
       # proving test must run HERE. A verify_*.cljs that exists in test/browser
       # but has no CI step is a claim nobody runs — the exact failure mode
@@ -96,12 +96,12 @@ jobs:
       # wasm-tools is installed above, so both are gateable with no new
       # machinery.
       - name: kuro.fs in-browser E2E (fs-browser build)
-        run: npx nbb -cp test/browser test/browser/verify_fs_browser.cljs
+        run: npx nbb -cp test/browser test/browser/verify_fs_browser.cljk
       - name: Stream Worker-convergence E2E (guest runs inside the Worker)
-        run: npx nbb -cp test/browser test/browser/verify_stream_worker.cljs
+        run: npx nbb -cp test/browser test/browser/verify_stream_worker.cljk
 
-      # The parity runner (test/run_parity_tests.cljs) and host runner
-      # (test/run_host_tests.cljs) each carry a namespace-drift guard: a test
+      # The parity runner (test/run_parity_tests.cljk) and host runner
+      # (test/run_host_tests.cljk) each carry a namespace-drift guard: a test
       # file that is never required runs nowhere yet stays green everywhere —
       # the silent-half-green class CLAUDE.md names. The browser E2Es have no
       # runner; each verify_*.cljs above is a standalone nbb script listed as
