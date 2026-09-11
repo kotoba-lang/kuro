@@ -18,7 +18,7 @@
     - the un-granted write scenario is refused with a recorded denial
 
   Run: npx shadow-cljs compile fs-browser && npx nbb -cp test/browser
-       test/browser/verify_guest_fs_cap.cljs"
+       test/browser/verify_guest_fs_cap.cljk"
 
   (:require ["node:child_process" :as child-process]
             ["node:http" :as http]

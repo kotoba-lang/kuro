@@ -182,10 +182,10 @@
 
 (deftest real-world-output
   (testing "git-style coloured status survives intact"
-    (let [out (str e "[32mM " e "[0msrc/kuro/ansi.cljc\n"
+    (let [out (str e "[32mM " e "[0msrc/kuro/ansi.cljk\n"
                e "[31mD " e "[0mold.cljc\n")
           ls (ansi/lines out)]
       (is (= 3 (count ls)))                     ; trailing newline -> empty last line
-      (is (= "M src/kuro/ansi.cljc" (str/join (map :text (first ls)))))
+      (is (= "M src/kuro/ansi.cljk" (str/join (map :text (first ls)))))
       (is (= {:fg "green"} (:style (ffirst ls))))
       (is (= {} (:style (second (first ls))))))))

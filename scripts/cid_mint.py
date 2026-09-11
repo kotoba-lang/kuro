@@ -7,7 +7,7 @@ the multihash / multibase / CIDv1 specs (not ported from `kuro.host.cid`), so
 the two implementations can disagree independently. It exists so the claim is
 a claim that *runs*, not a claim nobody checks.
 
-Algorithm pinned by `test/kuro/host/opfs_test.cljs` (#cid-py-mint): for the
+Algorithm pinned by `test/kuro/host/opfs_test.cljk` (#cid-py-mint): for the
 same bytes, this must print exactly what `kuro.host.cid/sha256-raw-cid`
 produces. CIDv1 + raw codec 0x55 + sha2-256 (multihash 0x12, length 0x20),
 36 bytes header+digest, multicodec prefix renders as the `bafkrei` that IPFS

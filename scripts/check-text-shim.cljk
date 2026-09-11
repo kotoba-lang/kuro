@@ -3,7 +3,7 @@
 ;;
 ;; deps.edn pins io.github.kotoba-lang/text at sha 73bdb13ae7a3d004b44bca08be03a3191157a38f;
 ;; nbb reads none of tools.deps, so the exact pinned source is vendored under
-;; test/cljs-shims/kotoba/lang/text.cljc and both nbb suites load it. A vendored
+;; test/cljs-shims/kotoba/lang/text.cljk and both nbb suites load it. A vendored
 ;; copy is a fork the moment someone edits it: the JVM then runs the pinned
 ;; kotoba.lang.text while parity/host run a different one, and test:parity —
 ;; the gate whose entire purpose is "the same code on both runtimes" — stays
@@ -48,9 +48,9 @@
 
 (defn- main []
   (let [pinned (pinned-sha)
-        actual (sha256 "test/cljs-shims/kotoba/lang/text.cljc")
+        actual (sha256 "test/cljs-shims/kotoba/lang/text.cljk")
         expected (str/trim (read-file
-                            "test/cljs-shims/kotoba/lang/text.cljc.sha256"))]
+                            "test/cljs-shims/kotoba/lang/text.cljk.sha256"))]
     (when-not pinned
       (println "FAIL: no io.github.kotoba-lang/text git/sha pin found in deps.edn")
       (exit! 1))

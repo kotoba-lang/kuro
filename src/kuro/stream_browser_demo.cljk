@@ -13,7 +13,7 @@
   kuro.host.stream-browser/start, makes it drive the REAL kuro-stream-worker.js
   (src/kuro/host/stream_worker.js), and surfaces the resulting chunks and
   exit receipt. It is compiled by shadow-cljs into the fs-browser build's
-  stream-browser module and loaded by test/browser/verify_stream_browser.cljs.
+  stream-browser module and loaded by test/browser/verify_stream_browser.cljk.
 
   Exposes window.streamBrowserE2E(guestSpecJson) -> Promise<result>."
   (:require [kuro.terminal :as t]

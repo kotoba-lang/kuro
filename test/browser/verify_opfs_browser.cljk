@@ -12,7 +12,7 @@
 ;;   - real put/get round-trip through kuro.fs's injected seam
 ;;   - real CID mint via WebCrypto inside the Worker
 ;;
-;; Run: npx nbb -cp test/browser test/browser/verify_opfs_browser.cljs
+;; Run: npx nbb -cp test/browser test/browser/verify_opfs_browser.cljk
 
 (ns verify-opfs-browser
   (:require ["node:http" :as http]
