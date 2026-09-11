@@ -3,8 +3,8 @@
   "private": true,
   "description": "nbb harness for kuro's Node host provider. The portable model needs no npm.",
   "scripts": {
-    "test:host": "nbb --classpath src:test:test/cljs-shims test/run_host_tests.cljk",
-    "test:parity": "nbb --classpath src:test:test/cljs-shims test/run_parity_tests.cljk"
+    "test:host": "kbb --backend sci --classpath src:test:test/cljs-shims test/run_host_tests.cljk",
+    "test:parity": "kbb --backend sci --classpath src:test:test/cljs-shims test/run_parity_tests.cljk"
   },
   "devDependencies": {
     "nbb": "1.4.208",

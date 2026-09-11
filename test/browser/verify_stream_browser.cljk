@@ -22,8 +22,8 @@
 ;;   - a real .wasm guest assembled from a WAT fixture (wasm-tools CLI)
 ;;   - the receipt carrying :kuro/isolation :browser-origin
 ;;
-;; Build:  npx shadow-cljs compile fs-browser   (emits js/stream-browser.js)
-;; Run:    npx nbb -cp test/browser test/browser/verify_stream_browser.cljk
+;; Build:  amu compile --target wasm32-browser fs-browser   (emits js/stream-browser.js)
+;; Run:    kbb --backend sci -cp test/browser test/browser/verify_stream_browser.cljk
 
 (ns verify-stream-browser
   (:require ["node:path" :as path]
@@ -151,7 +151,7 @@ try {
     (do (.mkdirSync fs tmp-dir #js {:recursive true})
         ;; the shadow-cljs build already emitted the stream-browser module
         (when-not (.existsSync fs (.join path tmp-dir "js" "stream-browser.js"))
-          (throw (js/Error. "stream-browser.js not built - run: npx shadow-cljs compile fs-browser")))
+          (throw (js/Error. "stream-browser.js not built - run: amu compile --target wasm32-browser fs-browser")))
         (.writeFileSync fs (.join path tmp-dir "index.html") page-html)
         (.writeFileSync fs
                         (.join path tmp-dir "kuro-stream-worker.js")

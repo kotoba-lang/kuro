@@ -48,7 +48,7 @@ widen the shape another host will not produce.
              {:kuro/cwd "."
               :kuro/grant {:capabilities #{"repo/read" "tmp/write"}}}))
 
-(def cmd (t/command ["clojure" "-M:test"]))
+(def cmd (t/command ["kbb" "-M:test"]))
 
 (t/receipt session cmd {:exit-code 0 :stdout "ok\n" :stderr ""})
 ```
@@ -281,7 +281,7 @@ See `test/browser/verify_*.cljs` (one file per entry above) and ADR-2609041240.
 ## Tests
 
 ```sh
-clojure -M:test                     # portable model + ansi + stream (JVM)
+kbb -M:test                     # portable model + ansi + stream (JVM)
 npm install
 npm run test:parity                 # the SAME .cljc suites under ClojureScript
 npm run test:host                   # both Node host providers (nbb)

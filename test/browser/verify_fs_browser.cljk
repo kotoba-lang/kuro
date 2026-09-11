@@ -1,7 +1,7 @@
 ;; verify_fs_browser.cljs — S4 E2E: the REAL kuro.fs model running INSIDE a
 ;; browser, with its host seam wired to the REAL OPFS block store Worker.
 ;;
-;; Compile: shadow-cljs compile fs-browser (the .cljc model compiles to
+;; Compile: amu compile --target wasm32-browser fs-browser (the .cljc model compiles to
 ;; cljs for the browser — the same source the JVM and nbb parity suites run).
 ;;
 ;; What must be REAL:
@@ -10,8 +10,8 @@
 ;;   - the kuro.fs host seam (put-block/get-block) satisfied by that store
 ;;
 ;; Run:
-;;   npx shadow-cljs compile fs-browser
-;;   npx nbb -cp test/browser test/browser/verify_fs_browser.cljk
+;;   amu compile --target wasm32-browser fs-browser
+;;   kbb --backend sci -cp test/browser test/browser/verify_fs_browser.cljk
 
 (ns verify-fs-browser
   (:require ["node:http" :as http]
@@ -77,7 +77,7 @@ try {
        (do (.mkdirSync fs tmp-dir #js {:recursive true})
            ;; the shadow-cljs build already emitted test/browser/.tmp/js/fs-demo.js
            (when-not (.existsSync fs (.join path tmp-dir "js" "fs-demo.js"))
-             (throw (js/Error. "fs-demo.js not built — run: npx shadow-cljs compile fs-browser")))
+             (throw (js/Error. "fs-demo.js not built — run: amu compile --target wasm32-browser fs-browser")))
            (.writeFileSync fs (.join path tmp-dir "index.html") page-html)
            ;; the worker source comes from src/ (same as the opfs E2E)
            (.writeFileSync fs

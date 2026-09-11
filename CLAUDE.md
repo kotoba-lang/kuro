@@ -58,7 +58,7 @@ receipt は必ず `:kuro/isolation` を持つ。既定 `:none`。**省略しな�
 ## テスト
 
 ```sh
-clojure -M:test          # 純モデル（JVM）
+kbb -M:test          # 純モデル（JVM）
 npm install
 npm run test:parity      # 同じ .cljc テストを ClojureScript で
 npm run test:host        # 実際に process を spawn する host
@@ -70,5 +70,5 @@ npm run test:host        # 実際に process を spawn する host
 ## 変更を出すとき
 
 superproject の `manifest/west.yml` の pin 前進は
-`nbb --classpath ".:scripts/nbb_compat" scripts/west-pin-put.cljs kuro <sha>`
+`kbb --backend sci --classpath ".:scripts/nbb_compat" scripts/west-pin-put.cljs kuro <sha>`
 （サーバ側で到達性と前進を検証する）。手で west.yml を編集しない。
