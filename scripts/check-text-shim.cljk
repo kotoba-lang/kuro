@@ -1,4 +1,4 @@
-#!/usr/bin/env nbb
+#!/usr/bin/env kbb
 ;; Drift guard for the vendored kotoba.lang.text shim (see commit e4da1c2 / #110).
 ;;
 ;; deps.edn pins io.github.kotoba-lang/text at sha 73bdb13ae7a3d004b44bca08be03a3191157a38f;
@@ -66,8 +66,8 @@
 
 (defn- script-invoked?
   "nbb resolves *file* to an absolute path; process.argv[2] is the path as
-  given. Compare resolved paths so both `nbb scripts/x.cljs scripts/x.cljs`
-  and a bare `nbb scripts/x.cljs` invocation behave the same."
+  given. Compare resolved paths so both `kbb --backend sci scripts/x.cljk scripts/x.cljs`
+  and a bare `kbb --backend sci scripts/x.cljk` invocation behave the same."
   []
   (let [resolved (try (.resolve (js/require "path") *file*) (catch :default _ *file*))
         arg (nth js/process.argv 2)]

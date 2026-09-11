@@ -1,4 +1,4 @@
-#!/usr/bin/env nbb
+#!/usr/bin/env kbb
 ;; **同じ `.cljc` テストを ClojureScript でも回す。**
 ;;
 ;; `kuro.ansi` / `kuro.stream` は `.cljc` で「portable」と名乗っているのに、
@@ -10,7 +10,7 @@
 ;; portable と書いたなら両方で回す。片方でしか回さない `.cljc` は、
 ;; 「動く」と言っている側が実は一度も動いていないことがある。
 ;;
-;;   nbb --classpath src:test test/run_parity_tests.cljk
+;;   kbb --backend sci --classpath src:test test/run_parity_tests.cljk
 
 (ns run-parity-tests
   (:require [cljs.test :as test]

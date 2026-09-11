@@ -16,7 +16,7 @@
 ;; "start", payload {guest, args}}, Worker -> Main {"kuro.stream/type":
 ;; "chunk"|"exit"|"ack"}. See stream_worker.js header for the full contract.
 ;;
-;; Run: npx nbb -cp test/browser test/browser/verify_stream_worker.cljk
+;; Run: kbb --backend sci -cp test/browser test/browser/verify_stream_worker.cljk
 
 (ns verify-stream-worker
   (:require ["node:http" :as http]

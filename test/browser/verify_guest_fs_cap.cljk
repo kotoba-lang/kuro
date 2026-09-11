@@ -17,7 +17,7 @@
       CID addressing)
     - the un-granted write scenario is refused with a recorded denial
 
-  Run: npx shadow-cljs compile fs-browser && npx nbb -cp test/browser
+  Run: amu compile --target wasm32-browser fs-browser && kbb --backend sci -cp test/browser
        test/browser/verify_guest_fs_cap.cljk"
 
   (:require ["node:child_process" :as child-process]
@@ -112,7 +112,7 @@ window.fsCapE2E().then((r) => { window.__capResults = r; window.__done = true; }
   (-> (js/Promise.resolve
        (do (.mkdirSync fs tmp-dir #js {:recursive true})
            (when-not (.existsSync fs (.join path tmp-dir "js" "fs-cap.js"))
-             (throw (js/Error. "fs-cap.js not built — run: npx shadow-cljs compile fs-browser")))))
+             (throw (js/Error. "fs-cap.js not built — run: amu compile --target wasm32-browser fs-browser")))))
       (.then (fn [] (compile-guest!)))
       (.then (fn [wasm-path]
                (.copyFileSync fs wasm-path (.join path tmp-dir "guest-fs.wasm"))

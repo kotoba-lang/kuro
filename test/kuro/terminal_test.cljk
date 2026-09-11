@@ -4,11 +4,11 @@
 
 (deftest builds-safe-session-and-receipt
   (let [sess (t/session "s1" "cid:repo" :terminal-repo)
-        cmd (t/command ["clojure" "-M:test"])
+        cmd (t/command ["kbb" "-M:test"])
         rcpt (t/receipt sess cmd {:exit-code 0 :stdout "ok\n" :stderr ""})]
     (is (= :terminal-repo (:kuro/mode sess)))
     (is (t/command-allowed? sess ["repo/read"]))
-    (is (= ["clojure" "-M:test"] (:kuro/argv rcpt)))
+    (is (= ["kbb" "-M:test"] (:kuro/argv rcpt)))
     (is (= 0 (:kuro/exit-code rcpt)))
     (is (= :kuro/terminal-receipt (:kotoba/type (t/receipt-fact rcpt))))))
 
@@ -178,9 +178,9 @@
     (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
                  (t/command []))))
   (testing "what is accepted is exactly the declared shape: kuro/argv vector of strings"
-    (let [c (t/command ["clojure" "-M:test"])]
+    (let [c (t/command ["kbb" "-M:test"])]
       (is (= :kuro/command (:kuro/type c)))
-      (is (= ["clojure" "-M:test"] (:kuro/argv c)))
+      (is (= ["kbb" "-M:test"] (:kuro/argv c)))
       (is (vector? (:kuro/argv c)))
       (is (every? string? (:kuro/argv c))))))
 
