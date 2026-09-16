@@ -73,7 +73,11 @@ jobs:
       # (e4da1c2) — a vendored copy is a fork the moment someone edits it, and
       # test:parity would stay green while comparing two different libraries.
       # Pin the vendored file's sha256; drift fails this job on purpose.
-      - run: npx nbb scripts/check-text-shim.cljk
+      # A .cljk script: stock nbb cannot resolve .cljk (ADR-2609111500) -
+      # measured on the 2026-09-16 run of this job ("Could not find
+      # namespace: kotoba.lang.text"). Run it on the same kbb engine as
+      # the suites.
+      - run: kbb --backend sci --classpath .:test/cljs-shims scripts/check-text-shim.cljk
 
   # The browser E2Es (README "Verified end-to-end") ran only on developer
   # machines: shadow-cljs compile + Playwright + wasm-tools were all
