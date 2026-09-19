@@ -64,7 +64,7 @@
   (let [fs (js/require "node:fs")
         dir (str (js/process.cwd) "/test/kuro/host")]
     (->> (js->clj (.readdirSync fs dir))
-         (filter #(.endsWith % "_test.cljs"))
+         (filter #(.endsWith % "_test.cljk"))
          (map (fn [f] (symbol (str "kuro.host."
                                   (str/replace (subs f 0 (- (count f) 5)) "_" "-")))))
          (into #{}))))
