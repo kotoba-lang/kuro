@@ -51,7 +51,7 @@
 ;; test files under test/kuro/; the host runner only protects against a
 ;; *dropped deftest* (the count map above), not against a whole dropped file.
 ;;
-;; A new `test/kuro/host/*_test.cljs` that is forgotten here would run on
+;; A new `test/kuro/host/*_test.cljk` that is forgotten here would run on
 ;; NEITHER JVM (which only auto-discovers `.cljc` model tests, not `.cljs` host
 ;; tests) NOR nbb — a test that never runs on any runtime while the gates stay
 ;; green. That is the same silent-half-green failure class CLAUDE.md names

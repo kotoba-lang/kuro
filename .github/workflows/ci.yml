@@ -28,6 +28,31 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      # The package.json scripts call `kbb` (ADR-2609112000 kbb cutover). kbb
+      # is bin/kbb of kotoba-lang/kotoba, and its ENGINE is kotoba-lang/
+      # org-babashka-nbb - the nbb fork whose classpath resolver reads .cljk
+      # (stock nbb probes only .cljs/.cljc/.clj and would fail every require
+      # after the ADR-2609111500 cljk rename). Both repos are PUBLIC, so the
+      # workflow token can check them out. The engine's only runtime dep is
+      # import-meta-resolve; lib/ (the precompiled cljs) is tracked in git, so
+      # `npm install --omit=dev` is all it needs. The sibling layout
+      # (kbb-deps/kotoba next to kbb-deps/org-babashka-nbb) is exactly what
+      # bin/kbb's default engine resolution expects:
+      # $KBB_HOME/../org-babashka-nbb/cli.js. Measured locally 2026-09-16:
+      # this recipe runs test:host 87 tests/290 assertions and test:parity
+      # 84 tests/426 assertions, 0 failures (issue #125).
+      - uses: actions/checkout@v4
+        with:
+          repository: kotoba-lang/kotoba
+          ref: main
+          path: kbb-deps/kotoba
+      - uses: actions/checkout@v4
+        with:
+          repository: kotoba-lang/org-babashka-nbb
+          ref: main
+          path: kbb-deps/org-babashka-nbb
+      - run: npm install --omit=dev --no-audit --no-fund --prefix kbb-deps/org-babashka-nbb
+      - run: echo "$GITHUB_WORKSPACE/kbb-deps/kotoba/bin" >> "$GITHUB_PATH"
       - run: npm install
       # The Node host provider. This one actually spawns processes, so it is
       # the gate that proves a receipt describes a command that really ran.
@@ -48,7 +73,11 @@ jobs:
       # (e4da1c2) — a vendored copy is a fork the moment someone edits it, and
       # test:parity would stay green while comparing two different libraries.
       # Pin the vendored file's sha256; drift fails this job on purpose.
-      - run: npx nbb scripts/check-text-shim.cljk
+      # A .cljk script: stock nbb cannot resolve .cljk (ADR-2609111500) -
+      # measured on the 2026-09-16 run of this job ("Could not find
+      # namespace: kotoba.lang.text"). Run it on the same kbb engine as
+      # the suites.
+      - run: kbb --backend sci --classpath .:test/cljs-shims scripts/check-text-shim.cljk
 
   # The browser E2Es (README "Verified end-to-end") ran only on developer
   # machines: shadow-cljs compile + Playwright + wasm-tools were all
