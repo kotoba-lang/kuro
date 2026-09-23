@@ -53,6 +53,20 @@ jobs:
           path: kbb-deps/org-babashka-nbb
       - run: npm install --omit=dev --no-audit --no-fund --prefix kbb-deps/org-babashka-nbb
       - run: echo "$GITHUB_WORKSPACE/kbb-deps/kotoba/bin" >> "$GITHUB_PATH"
+      # The kbb engine (lib/nbb_deps.js of kotoba-lang/org-babashka-nbb)
+      # resolves :deps with a real `bb --config ... uberjar` shell call, so
+      # the host job needs the real babashka on PATH, not just kbb.
+      # #127's recipe got kbb onto PATH but the engine's first bb call failed:
+      # 2026-09-23 runs 35850860530 (main) and 35850858840 both died at
+      # `npm run test:host` with "/bin/sh: 1: bb: not found" (issue #125,
+      # host half). The version is pinned so an upstream release cannot
+      # break this job with no diff in this repo.
+      - name: Install babashka (the kbb engine's dep resolution shells out to bb)
+        run: |
+          curl -fsSL https://github.com/babashka/babashka/releases/download/v1.13.224/babashka-1.13.224-linux-amd64-static.tar.gz -o /tmp/bb.tar.gz
+          tar -xzf /tmp/bb.tar.gz -C /tmp
+          sudo install /tmp/bb /usr/local/bin/bb
+          bb --version
       - run: npm install
       # The Node host provider. This one actually spawns processes, so it is
       # the gate that proves a receipt describes a command that really ran.
