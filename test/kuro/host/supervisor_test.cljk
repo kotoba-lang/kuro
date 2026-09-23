@@ -157,23 +157,51 @@
   ;; only, at the supervisor seam).
   (async done
     (let [s (sup/new-supervisor)
-          seen (atom 0)]
+          seen (atom 0)
+          ;; pipe は書き込みごとに 1 チャンクを保証しない ('b\n' と 'c\n' が
+          ;; 'b\nc\n' に合流する実行があった: w2 が () に、build が
+          ;; ("a\n" "b\nc\n") になった)。pinned なのは chunk 分割ではなく性質 --
+          ;; forward-only (attach 時点の prefix を replay しない) と no-loss
+          ;; (attach 以降に流れた全 byte が w2 に届く)。
+          ;;
+          ;; read-window はその窓の cursor を進める (tmux と同じ)。prefix を
+          ;; read-window で記録すると build 窓の cursor が進み、on-exit 以降
+          ;; の read は残りの分しか返さない (08c399c で :188 赤になった経路)。
+          ;; だから prefix は on-chunk 経路の :text で記録し (window cursor を
+          ;; 触らず)、no-loss は build 窓の cursor を触らず on-exit で一度だけ
+          ;; 読む。no-loss が成り立つのは attach が on-chunk コールバック内
+          ;; (そのチャンクの配信完了後) で行われるから。
+          prefix (atom "")
+          full-text (atom "")]
       (sup/start! s "build" (safe)
                   (emit "process.stdout.write('a\\n'); setTimeout(()=>process.stdout.write('b\\n'),60); setTimeout(()=>process.stdout.write('c\\n'),160); setTimeout(()=>process.exit(0),300)")
                   {:repo-root "."
-                   :on-chunk (fn [_ _]
+                   :on-chunk (fn [_ c]
+                               (swap! full-text str (:text c))
                                (when (= 2 (swap! seen inc))
                                  ;; 'a' and 'b' have streamed; attach a brand-new window now
+                                 (reset! prefix @full-text)
                                  (sup/attach-window! s "w2" "build")
                                  (is (empty? (sup/read-window s "w2"))
                                      "a fresh attach replays nothing already streamed")))
                    :on-exit (fn [r]
                               (is (= 0 (:kuro/exit-code r)))
-                              (testing "the late-attached window sees only what streams in after it"
-                                (is (= ["c\n"] (map :text (sup/read-window s "w2")))
-                                    "forward-only from the attach moment: no replay, no loss"))
+                              (testing "the late-attached window sees exactly what streams in after it"
+                                (let [full "a\nb\nc\n"
+                                      tail (subs full (count @prefix))]
+                                  (is (= tail (apply str (map :text (sup/read-window s "w2"))))
+                                      "forward-only from the attach moment: no replay, no loss")))
+                              (testing "the child's output reached the registry with no loss"
+                                (is (= "a\nb\nc\n" @full-text)
+                                    "no loss, regardless of how the pipe chunked the writes"))
                               (testing "the original window keeps its full prefix"
-                                (is (= ["a\n" "b\n" "c\n"] (map :text (sup/read-window s "build")))))
+                                (is (= "a\nb\nc\n"
+                                       (apply str (map :text (sup/read-window s "build"))))
+                                    "the build window's cursor was never advanced mid-run,
+so it still holds everything the child wrote"))
+                              (testing "reading the same window twice does not double-deliver"
+                                (is (empty? (sup/read-window s "build"))
+                                    "the cursor advanced with the read (tmux semantics)"))
                               (done))}))))
 (deftest start-binds-a-window-id-distinct-from-the-session-name
   ;; sup/start! docstring: "sess で cmd を spawn し、registry に name で登録、
