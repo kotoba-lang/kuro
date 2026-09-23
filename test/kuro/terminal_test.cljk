@@ -1,5 +1,5 @@
 (ns kuro.terminal-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [kuro.terminal :as t]))
 
 (deftest builds-safe-session-and-receipt

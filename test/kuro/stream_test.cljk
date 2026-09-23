@@ -1,5 +1,5 @@
 (ns kuro.stream-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [kuro.stream :as stream]
             [kuro.terminal :as t]))
 

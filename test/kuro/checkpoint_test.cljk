@@ -1,5 +1,5 @@
 (ns kuro.checkpoint-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [kuro.checkpoint :as cp]
             [kuro.stream :as stream]
             [kuro.terminal :as t]))
