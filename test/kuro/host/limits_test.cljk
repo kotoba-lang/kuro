@@ -4,7 +4,7 @@
   contract a caller reads — a silent change makes the table lie. The existing
   deadline/output-cap tests only exercise explicitly-passed values, so this
   suite pins the defaults themselves and is shared by both Node providers."
-  (:require [clojure.test :refer [deftest is testing async]]
+  (:require [kotoba.test :refer [deftest is testing async]]
             [kuro.host.node :as node]
             [kuro.host.stream-node :as sh]
             [kuro.stream :as stream]

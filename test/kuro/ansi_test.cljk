@@ -1,6 +1,6 @@
 (ns kuro.ansi-test
   (:require [kotoba.lang.text :as str]
-            [clojure.test :refer [deftest is testing]]
+            [kotoba.test :refer [deftest is testing]]
             [kuro.ansi :as ansi]))
 
 (def ^:private e "\u001b")

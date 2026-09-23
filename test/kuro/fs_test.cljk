@@ -1,5 +1,5 @@
 (ns kuro.fs-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [kuro.fs :as fs]))
 
 ;; host stand-ins: the simplest possible block store — in-memory, cid = hex-ish
