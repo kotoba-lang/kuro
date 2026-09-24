@@ -1,7 +1,7 @@
 (ns kuro.host.stream-node-test
   "async テスト。`cljs.test` の `async` を使い、コールバックが呼ばれたことを
   必ず確認する —— 呼ばれなければタイムアウトで落ちる（黙って通らない）。"
-  (:require [clojure.set :as set]
+  (:require [kotoba.lang.coll :as set]
             [kotoba.lang.text :as str]
             [cljs.test :refer [deftest is testing async]]
             [kuro.host.cid :as cid]
