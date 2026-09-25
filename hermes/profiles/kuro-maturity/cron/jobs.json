@@ -24,7 +24,7 @@
       "script": "maturity_state.sh",
       "skill": null,
       "skills": [],
-      "workdir": "~/github/com-junkawasaki/orgs/kotoba-lang/kuro"
+      "workdir": null
     }
   ]
 }
