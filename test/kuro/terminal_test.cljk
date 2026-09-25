@@ -18,21 +18,21 @@
             the shape a shell would take — is refused before any host sees it"
     (is (= {:kuro/type :kuro/command :kuro/argv ["true" "-x"]}
            (select-keys (t/command ["true" "-x"]) [:kuro/type :kuro/argv])))
-    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+    (is (thrown? js/Error
                  (t/command "true && rm -rf /"))))
   (testing "empty argv is refused — there is nothing to run, and 'whatever the
             host defaults to' is not a decision the model makes"
-    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+    (is (thrown? js/Error
                  (t/command []))))
   (testing "blank elements are refused — a blank argv element is either a
             quoting bug or an injection attempt; neither may reach spawn"
-    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+    (is (thrown? js/Error
                  (t/command ["echo" ""])))
-    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+    (is (thrown? js/Error
                  (t/command ["echo" "  "])))
-    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+    (is (thrown? js/Error
                  (t/command ["echo" nil])))
-    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+    (is (thrown? js/Error
                  (t/command ["echo" 42])))))
 
 (deftest receipt-is-one-namespace
@@ -54,24 +54,24 @@
   ;; 壊れた argv が model を通ると、receipt の :kuro/argv が検査されずに
   ;; 台帳に入る —— 検証は host に任せず、ここで固定する。
   (testing "a non-vector is refused"
-    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+    (is (thrown? js/Error
                  (t/command '("echo" "hi"))))
-    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+    (is (thrown? js/Error
                  (t/command "echo hi")))
-    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+    (is (thrown? js/Error
                  (t/command nil))))
   (testing "an empty vector is refused — a command with no argv runs nothing"
-    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+    (is (thrown? js/Error
                  (t/command []))))
   (testing "a non-string element is refused"
-    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+    (is (thrown? js/Error
                  (t/command ["echo" 42])))
-    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+    (is (thrown? js/Error
                  (t/command ["echo" nil]))))
   (testing "a blank string element is refused"
-    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+    (is (thrown? js/Error
                  (t/command ["echo" ""])))
-    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+    (is (thrown? js/Error
                  (t/command ["echo" "   "]))))
   (testing "a valid argv passes and round-trips"
     (is (= ["echo" "hi"] (:kuro/argv (t/command ["echo" "hi"]))))))
@@ -85,7 +85,7 @@
       (is (nil? (:kuro/pid rcpt))))))
 
 (deftest receipt-requires-integer-exit-code
-  (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+  (is (thrown? js/Error
                (t/receipt (t/session "s1" "cid:repo" :terminal-repo)
                           (t/command ["true"])
                           {:exit-code nil}))))
@@ -101,7 +101,7 @@
 
 (deftest host-terminal-requires-signed-opt-in
   (testing "unsigned host mode is rejected"
-    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+    (is (thrown? js/Error
                  (t/session "host" "cid:repo" :terminal-host))))
   (testing "signed host mode is allowed"
     (is (= :terminal-host
@@ -165,17 +165,17 @@
   ;; refusal depends on which host is wired in. Every host (sync, streaming)
   ;; then inherits the guarantee instead of re-implementing it.
   (testing "a bare string is the shell-interpolation shape and is refused"
-    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+    (is (thrown? js/Error
                  (t/command "npm test"))))
   (testing "empty and blank elements are refused (they would vanish or break argv)"
-    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+    (is (thrown? js/Error
                  (t/command ["npm" ""])))
-    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+    (is (thrown? js/Error
                  (t/command ["npm" " "]))))
   (testing "nil elements and empty vectors are refused"
-    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+    (is (thrown? js/Error
                  (t/command ["npm" nil])))
-    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+    (is (thrown? js/Error
                  (t/command []))))
   (testing "what is accepted is exactly the declared shape: kuro/argv vector of strings"
     (let [c (t/command ["kbb" "-M:test"])]
