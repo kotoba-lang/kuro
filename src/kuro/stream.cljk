@@ -27,7 +27,7 @@
   効くが、**畳んだ側の総量**はここでしか分からない（stdout と stderr の合計、
   複数 chunk にまたがる分）。超えたら `:kuro/truncated?` を立てて以後の本文を
   捨て、**捨てたバイト数を数える** —— 黙って切ると receipt が嘘をつく。"
-  (:require [kotoba.lang.text :as str]
+  (:require [kotoba.bytes :as kbytes] [kotoba.lang.text :as str]
             [kuro.terminal :as t]))
 
 (def default-max-output-bytes (* 1024 1024))
@@ -36,7 +36,7 @@
   "UTF-8 バイト数。JVM/JS で同じ数を出す（`count` は文字数なので使えない —— 日本語の
    ログで 3 倍ずれる）。`kuro.checkpoint` の `:max-chunk-bytes` 切詰めもこれを共有する。"
   [s]
-  #?(:clj (alength (.getBytes ^String (str s) "UTF-8"))
+  #?(:clj (alength (kbytes/utf8-bytes ^String (str s)))
      :cljs (.-length (.encode (js/TextEncoder.) (str s)))))
 
 (defn open

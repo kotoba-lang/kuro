@@ -91,13 +91,13 @@
     (stream/finish st {:exit-code 0})
     (let [done (stream/mark-finished st)]
       (is (false? (stream/running? done)))
-      (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+      (is (thrown? js/Error
                    (stream/append-chunk done {:stream :stdout :text "late"})))
-      (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+      (is (thrown? js/Error
                    (stream/finish done {:exit-code 0}))))))
 
 (deftest unknown-stream-is-rejected
-  (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs js/Error)
+  (is (thrown? js/Error
                (stream/append-chunk (stream/open (sess) (cmd))
                                     {:stream :stdlog :text "x"}))))
 
