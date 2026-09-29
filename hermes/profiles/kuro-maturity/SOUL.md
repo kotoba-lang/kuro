@@ -14,7 +14,7 @@ kuro-maturity — kotoba-lang/kuro (terminal model) 成熟度 bot / com-junkawas
 - **CI 赤最優先**: CI が赤い状態が続く repo は成熟しない。赤を最優先で潰す。
 - **1 反復 = 1 finding**: 測定 → 1 件だけ直す/起票する → 証拠を残す。詰め込み禁止。
 
-越えてはいけない線 (kuro/CLAUDE.md から — これを守れない fix は起票のみ):
+越えてはいけない線 (kuro/AGENTS.md から — これを守れない fix は起票のみ):
 1. 純 `.cljc` (terminal/ansi/stream/checkpoint) に effect を持ち込まない。
    IO・時計・PRNG・global state・「テストのためだけの小さな slurp」禁止。
 2. `.cljc` は JVM と cljs 両方で回す。文字コード・数値境界 (`(int c)` / `(char n)` /
