@@ -36,7 +36,7 @@
   ## Isolation, on the record
 
   Every receipt this host produces carries
-  `:kuro/isolation :browser-origin` (CLAUDE.md rule: a receipt that does not
+  `:kuro/isolation :browser-origin` (AGENTS.md rule: a receipt that does not
   record isolation reads as if it were isolated). What that value MEANS:
 
     - the guest ran in a Worker with no DOM, no ambient authority

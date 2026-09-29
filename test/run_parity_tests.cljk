@@ -41,7 +41,7 @@
   namespace on the classpath; this runner instead lists them by hand above. If a
   new portable test file is added and forgotten here, it will run on JVM but be
   silently skipped by parity - the exact silent-half-green failure class
-  CLAUDE.md names (2026-08-03: kuro.ansi green on JVM, never run on cljs)."
+  AGENTS.md names (2026-08-03: kuro.ansi green on JVM, never run on cljs)."
   []
   (let [fs (js/require "node:fs")
         dir (str (js/process.cwd) "/test/kuro")]

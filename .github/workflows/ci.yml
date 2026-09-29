@@ -132,7 +132,7 @@ jobs:
       # The parity runner (test/run_parity_tests.cljk) and host runner
       # (test/run_host_tests.cljk) each carry a namespace-drift guard: a test
       # file that is never required runs nowhere yet stays green everywhere —
-      # the silent-half-green class CLAUDE.md names. The browser E2Es have no
+      # the silent-half-green class AGENTS.md names. The browser E2Es have no
       # runner; each verify_*.cljs above is a standalone nbb script listed as
       # its own step, so the same drift needs an explicit gate here. A
       # verify_*.cljs that exists in test/browser but has no step in this job

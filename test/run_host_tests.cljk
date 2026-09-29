@@ -27,7 +27,7 @@
 ;; suite reports green anyway. Measured: `kuro.host.stream-node-test` is
 ;; 4/29 — 25 tests (including the #96/#97/#98 guards) loaded but never ran,
 ;; and CI has been green the whole time. This is the exact failure class
-;; CLAUDE.md warns about ("緑だった側は誰も使わず"). `cljs.test` has no way to
+;; AGENTS.md warns about ("緑だった側は誰も使わず"). `cljs.test` has no way to
 ;; know a deftest was dropped, so the runner asserts the registered `:test`
 ;; deftest count equals the source count and exits nonzero on a gap.
 ;;
@@ -54,7 +54,7 @@
 ;; A new `test/kuro/host/*_test.cljk` that is forgotten here would run on
 ;; NEITHER JVM (which only auto-discovers `.cljc` model tests, not `.cljs` host
 ;; tests) NOR nbb — a test that never runs on any runtime while the gates stay
-;; green. That is the same silent-half-green failure class CLAUDE.md names
+;; green. That is the same silent-half-green failure class AGENTS.md names
 ;; (2026-08-03: kuro.ansi green on JVM, never run where the consumer lives).
 ;; This guard turns "added a host test file and forgot to wire it up" into a
 ;; hard, named CI failure.
