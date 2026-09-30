@@ -215,7 +215,7 @@
   ;; kernel. ... A command granted only `repo/read` can still write to disk."
   ;; The model-side half of that claim is that `t/command` / the gate never
   ;; inspect argv contents against capabilities. Adding argv inspection would
-  ;; claim a confinement this repo does not have (the CLAUDE.md line: the mode
+  ;; claim a confinement this repo does not have (the AGENTS.md line: the mode
   ;; is a grant scope, not an isolation level). Pin that the gate looks at
   ;; capabilities only.
   (testing "an argv naming a destructive binary is allowed under a read-only grant"

@@ -249,7 +249,7 @@
 
 (deftest receipt-becomes-a-kotoba-fact
   ;; `kuro.terminal/receipt-fact` is the seam where a terminal receipt leaves
-  ;; the kuro namespace for the kotoba fact store. CLAUDE.md rule 4 has the
+  ;; the kuro namespace for the kotoba fact store. AGENTS.md rule 4 has the
   ;; fact carrying the whole map -- a consumer that reaches for
   ;; `(:kuro/receipt f)` is relying on the *embedding* itself, which no test
   ;; pinned. The existing assertions covered only :kotoba/type and
