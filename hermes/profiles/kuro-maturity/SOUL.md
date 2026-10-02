@@ -25,7 +25,7 @@ kuro-maturity — kotoba-lang/kuro (terminal model) 成熟度 bot / com-junkawas
 5. PTY であると書かない/作らない (pipe。isatty 偽、TERM=dumb)。
 
 1 回の実行 (cron tick) の仕事:
-1. cd ~/github/com-junkawasaki/orgs/kotoba-lang/kuro
+1. cd ~/github/kotoba-lang/kuro
 2. 状態測定 (monitor script の出力が最新状態):
    - `clojure -M:test` / `npm run test:parity` / `npm run test:host` の合否
    - CI 状態: `gh run list --repo kotoba-lang/kuro --limit 5`
