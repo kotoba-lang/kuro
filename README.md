@@ -278,6 +278,43 @@ nothing about fs/read (separate leaves).
 
 See `test/browser/verify_*.cljs` (one file per entry above) and ADR-2609041240.
 
+## Browser JS / Python function tools
+
+The browser backing can also consume agent function calls named `js` and
+`python`. Each call runs in a fresh Worker and returns JSON results, UTF-8
+stdout/stderr, selected files, and a terminal receipt. A main-thread timeout
+or AbortSignal terminates even a synchronous infinite loop.
+
+```sh
+npm ci
+npm run build:browser-tools
+npm run serve:browser-tools
+# Open http://127.0.0.1:8123
+```
+
+The build serves fixed QuickJS/Wasm and Pyodide assets locally, with no CDN.
+The Python runtime exposes its JS bridge and requires an extra
+`tool/python-js-bridge` grant; it is for trusted code on a dedicated origin.
+It does not provide untrusted-tenant network/storage confinement or a hard
+Python memory limit.
+
+```js
+import {createToolHost, toolDefinitions, toToolMessage} from './client.js';
+const host = createToolHost({capabilities: ['tool/js']});
+const response = await host.call({id: 'call_1', type: 'function', function: {
+  name: 'js', arguments: JSON.stringify({code: 'inputs.a + inputs.b', inputs: {a: 20, b: 22}})
+}});
+// response.result === 42; response.receipt['kuro/exit-code'] === 0
+const message = toToolMessage(response); // role: tool, tool_call_id: call_1
+// Pass toolDefinitions to the model and message back into its conversation.
+```
+
+`kuro.host.tool-browser/create` derives admission from a terminal session.
+Its `call-with-filesystem` adapter imports explicit paths from `kuro.fs` and
+writes explicit exports back through the existing block-store effects.
+See [the browser tools decision](docs/adr/0001-browser-js-python-tool-calls.md)
+for capability, isolation, memory, filesystem, and async boundaries.
+
 ## Tests
 
 ```sh
