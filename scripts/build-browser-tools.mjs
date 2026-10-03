@@ -2,6 +2,7 @@ import {build} from 'esbuild';
 import {mkdir, copyFile, readdir} from 'node:fs/promises';
 const outdir = 'target/browser-tools';
 await mkdir(`${outdir}/pyodide`, {recursive: true});
+await mkdir(`${outdir}/licenses`, {recursive: true});
 await build({entryPoints: {
   client: 'src/kuro/host/tools/client.js', worker: 'src/kuro/host/tools/worker.js'
 }, outdir, bundle: true, format: 'esm', platform: 'browser', target: 'es2022',
@@ -14,3 +15,5 @@ for (const name of await readdir('node_modules/pyodide')) {
 }
 await copyFile('examples/browser-tools/index.html', `${outdir}/index.html`);
 await copyFile('node_modules/@jitl/quickjs-wasmfile-release-sync/dist/emscripten-module.wasm', `${outdir}/emscripten-module.wasm`);
+await copyFile('node_modules/@jitl/quickjs-wasmfile-release-sync/LICENSE', `${outdir}/licenses/quickjs.txt`);
+await copyFile('examples/browser-tools/THIRD_PARTY.md', `${outdir}/licenses/THIRD_PARTY.md`);
