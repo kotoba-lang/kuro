@@ -315,6 +315,12 @@ writes explicit exports back through the existing block-store effects.
 See [the browser tools decision](docs/adr/0001-browser-js-python-tool-calls.md)
 for capability, isolation, memory, filesystem, and async boundaries.
 
+The current Hermes Agent was also probed inside this actual browser Python
+host. Its pure iteration budget works, but the unmodified agent import,
+thread-backed tool pool, and subprocess requirements are blocked. See the
+[Hermes browser verification and raw evidence](docs/verification/hermes-browser.md)
+before treating a working Python tool as a working browser-local Hermes agent.
+
 ## Tests
 
 ```sh
