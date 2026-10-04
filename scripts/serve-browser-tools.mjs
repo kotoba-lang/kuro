@@ -22,7 +22,7 @@ export function serve(root = resolve('target/browser-tools'), port = 0, {handleR
     server.listen(port, '127.0.0.1', () => resolveReady({server, url: `http://127.0.0.1:${server.address().port}`}));
   });
 }
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const {url} = await serve(undefined, 8123);
   console.log(url);
 }

@@ -115,6 +115,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      # stock nbb reads nbb.edn and shells out to bb for its pinned deps.
+      - name: Install babashka for browser harness dependency resolution
+        run: |
+          curl -fsSL https://github.com/babashka/babashka/releases/download/v1.13.224/babashka-1.13.224-linux-amd64-static.tar.gz -o /tmp/bb.tar.gz
+          tar -xzf /tmp/bb.tar.gz -C /tmp
+          sudo install /tmp/bb /usr/local/bin/bb
       - run: npm install
       - name: Install wasm-tools
         run: |
