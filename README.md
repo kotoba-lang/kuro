@@ -338,3 +338,11 @@ all under ClojureScript** — `(int c)` is `NaN` there, so the CSI scanner never
 found a final byte and discarded everything. The consumer that broke was
 `kobo`'s server, which runs on nbb. A `.cljc` namespace tested on one runtime
 can be entirely dead on the other.
+
+### Experimental Hermes browser profile
+
+The [Hermes browser profile](docs/verification/hermes-browser-profile.md) adds
+locked Wasm-compatible dependencies, browser model transport, serial execution,
+and Kuro JS/Python tools to the original Hermes conversation loop. Local Chromium
+qualification uses a model fixture; live inference and native process tools are
+not qualified. Reproduce with `prepare:hermes-browser` and `test:hermes-browser`.

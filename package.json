@@ -8,7 +8,9 @@
     "test:browser-tools": "npm run build:browser-tools && node test/browser/verify_tools.mjs",
     "test:tool-adapter": "kbb --backend sci --classpath src:test:test/cljs-shims test/browser/verify_tool_adapter.cljk",
     "test:host": "kbb --backend sci --classpath src:test:test/cljs-shims test/run_host_tests.cljk",
-    "test:parity": "kbb --backend sci --classpath src:test:test/cljs-shims test/run_parity_tests.cljk"
+    "test:parity": "kbb --backend sci --classpath src:test:test/cljs-shims test/run_parity_tests.cljk",
+    "prepare:hermes-browser": "node scripts/prepare-hermes-browser.mjs",
+    "test:hermes-browser": "npm run build:browser-tools && node scripts/verify-hermes-adapter.mjs"
   },
   "devDependencies": {
     "esbuild": "0.25.12",

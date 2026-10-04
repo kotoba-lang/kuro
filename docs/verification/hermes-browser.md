@@ -1,5 +1,7 @@
 # Hermes Agent in the Kuro browser runtime: compatibility verification
 
+For the subsequent adapted execution profile, see [hermes-browser-profile.md](hermes-browser-profile.md). The result below applies to the unmodified standard-library-only profile.
+
 Verified 2026-10-03 in real headless Chromium through Kuro's Python tool.
 
 **Result: the current unmodified Hermes Agent does not run in this browser
