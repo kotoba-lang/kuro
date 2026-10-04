@@ -6,7 +6,7 @@ os.environ['HERMES_HOME'] = '/workspace/hermes-home'
 os.makedirs(os.environ['HERMES_HOME'], exist_ok=True)
 with open(os.environ['HERMES_HOME'] + '/config.yaml', 'w') as config:
     json.dump({'model': {'default': _kuro_inputs['model'], 'provider': 'custom',
-        'base_url': 'http://browser.invalid/v1', 'context_length': _kuro_inputs['contextLength'], 'streaming': False},
+        'base_url': 'http://browser.invalid/v1', 'context_length': _kuro_inputs['contextLength'], 'streaming': _kuro_inputs.get('streaming', True)},
         'tools': {'tool_search': {'enabled': 'off'}},
         'agent': {'environment_probe': False}, 'compression': {'enabled': False}}, config)
 source_root = '/workspace/hermes-source'
@@ -63,11 +63,31 @@ def run_browser_agent(prompt):
     model_metadata_http.get = unsupported_metadata
     model_metadata_http.stream = unsupported_metadata
     from openai import OpenAI
+    import base64
+    class BrowserByteStream(httpx.SyncByteStream):
+        def __init__(self, stream_id):
+            self.stream_id = stream_id
+            self.closed = False
+        def __iter__(self):
+            while not self.closed:
+                chunk = bridge('stream-read', {'id': self.stream_id})
+                if chunk['done']:
+                    self.closed = True
+                    return
+                yield base64.b64decode(chunk['bytes'])
+        def close(self):
+            if not self.closed:
+                self.closed = True
+                bridge('stream-close', {'id': self.stream_id})
     class BrowserTransport(httpx.BaseTransport):
         def handle_request(self, request):
             if request.method != 'POST' or not request.url.path.endswith('/chat/completions'):
                 raise RuntimeError('browser profile only supports chat completions')
-            response = bridge('model', json.loads(request.content))
+            payload = json.loads(request.content)
+            response = bridge('stream-open' if payload.get('stream') else 'model', payload)
+            if response.get('streamId'):
+                return httpx.Response(response['status'], headers={'Content-Type':'text/event-stream'},
+                    stream=BrowserByteStream(response['streamId']), request=request)
             return httpx.Response(response['status'], json=response['body'], request=request)
     class BrowserAgent(AIAgent):
         def _create_openai_client(self, client_kwargs, **kwargs):
@@ -78,8 +98,24 @@ def run_browser_agent(prompt):
             kwargs.pop('stream_options', None)
             kwargs['stream'] = False
             return self.client.chat.completions.create(**kwargs)
-        def _interruptible_streaming_api_call(self, api_kwargs, **kwargs):
-            return self._interruptible_api_call(api_kwargs)
+        def _interruptible_streaming_api_call(self, api_kwargs, *, on_first_delta=None):
+            from agent.chat_completion_helpers import _StreamingCall, _reset_stale_streak
+            import threading
+            call = _StreamingCall(self, api_kwargs, on_first_delta)
+            call._resolve_stale_timeout()
+            call._call_done = threading.Event()
+            call._monitor_interrupted = {'yes': False}
+            # Reuse Hermes's actual SSE accumulator and callbacks, without OS monitor threads.
+            call._run_call()
+            if self._interrupt_requested:
+                raise InterruptedError('browser stream interrupted')
+            if call.result['error'] is not None:
+                raise call.result['error']
+            if call.result['response'] is not None:
+                _reset_stale_streak(self)
+            if isinstance(call.clients.diag, dict) and call.clients.diag.get('first_chunk_at'):
+                self._last_api_first_chunk_at = float(call.clients.diag['first_chunk_at'])
+            return call.result['response']
     import agent.tool_executor as tool_executor
     def browser_tool_activity(agent, name, fn):
         agent._touch_activity('browser tool started: ' + name)
@@ -102,6 +138,14 @@ def run_browser_agent(prompt):
         base_url='http://browser.invalid/v1', api_key='browser-placeholder',
         enabled_toolsets=['kuro_browser'], max_iterations=5, quiet_mode=True,
         skip_context_files=True, load_soul_identity=False, skip_memory=True,
-        skip_background_review=True, save_trajectories=False, checkpoints_enabled=False)
-    agent._disable_streaming = True
-    return agent.run_conversation(prompt)
+        skip_background_review=True, save_trajectories=False, checkpoints_enabled=False,
+        session_id=_kuro_inputs.get('sessionId'),
+        stream_delta_callback=lambda text: _kuro_emit('delta', text),
+        reasoning_callback=lambda text: _kuro_emit('reasoning', text))
+    agent._disable_streaming = not _kuro_inputs.get('streaming', True)
+    snapshot = _kuro_inputs.get('snapshot')
+    if snapshot:
+        agent._cached_system_prompt = snapshot['systemPrompt']
+    result = agent.run_conversation(prompt, conversation_history=snapshot['messages'] if snapshot else None)
+    result['browserSystemPrompt'] = agent._cached_system_prompt
+    return result

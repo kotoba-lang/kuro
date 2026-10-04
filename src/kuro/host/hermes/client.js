@@ -1,6 +1,8 @@
 // A synchronous Hermes Worker may wait; the UI and tool Workers remain asynchronous.
 import {createToolHost, toolDefinitions} from '../tools/client.js';
-export function createHermesBrowser({capabilities = [], modelEndpoint, model, contextLength = 128000, modelHeaders = {}, timeoutMs = 120000,
+import {createModelTransport} from './transport.js';
+import {loadSession,commitSession} from './sessions.js';
+export function createHermesBrowser({capabilities = [], modelEndpoint, model, contextLength = 128000, modelHeaders = {}, streaming = true, timeoutMs = 120000,
   workerUrl = new URL('./hermes-worker.js', import.meta.url)} = {}) {
   if(typeof model !== 'string' || !model) throw Error('model is required');
   if(!Number.isSafeInteger(contextLength) || contextLength < 64000) throw Error('contextLength must be at least 64000');
@@ -11,14 +13,17 @@ export function createHermesBrowser({capabilities = [], modelEndpoint, model, co
   const endpoint = new URL(modelEndpoint, location.href);
   if (!['http:', 'https:'].includes(endpoint.protocol) || endpoint.username || endpoint.password) throw Error('invalid model endpoint');
   const host = createToolHost({capabilities, timeoutMs: Math.min(timeoutMs, 30000)});
-  return {run({sourceUrl, prompt, code}, {signal} = {}) {
+  const tools=toolDefinitions.filter(t=>grants.has(`tool/${t.function.name}`));
+  const identity=JSON.stringify({model,endpoint:endpoint.origin+endpoint.pathname,contextLength,tools:tools.map(t=>t.function.name),profile:'4f649c65-v2'});
+  async function execute({sourceUrl,prompt,code,sessionId,snapshot}, {signal,onDelta,onReasoning}={}) {
     sourceUrl = new URL(sourceUrl || './hermes-probe-source.tar.gz', import.meta.url).href;
     if(new URL(sourceUrl).origin !== location.origin) throw Error('source must be served on the application origin');
     return new Promise((resolve, reject) => {
       const worker = new Worker(workerUrl, {type:'module'});
       const controller = new AbortController();
+      const transport=createModelTransport({endpoint,headers:modelHeaders,signal:controller.signal});
       let done = false;
-      const finish = (error, value) => {if(done)return; done=true; clearTimeout(timer); controller.abort(); worker.terminate(); signal?.removeEventListener('abort',abort); error ? reject(error) : resolve(value);};
+      const finish = (error, value) => {if(done)return; done=true; clearTimeout(timer); controller.abort(); void transport.close(); worker.terminate(); signal?.removeEventListener('abort',abort); error ? reject(error) : resolve(value);};
       const abort = () => finish(Error('cancelled'));
       const timer = setTimeout(()=>finish(Error('Hermes deadline exceeded')),timeoutMs);
       signal?.addEventListener('abort',abort,{once:true});
@@ -26,23 +31,15 @@ export function createHermesBrowser({capabilities = [], modelEndpoint, model, co
       worker.onerror = event => finish(Error(event.message));
       worker.onmessage = async ({data}) => {
         if(data.kind==='done') return finish(data.error ? Error(data.error) : null,data.result);
-        if(data.kind!=='rpc') return;
+        if(data.kind==='event'){if(!done){try{(data.event==='reasoning' ? onReasoning : onDelta)?.(data.text);}catch{}}return;}
+        if(data.kind!=='rpc' || done) return;
         const state=new Int32Array(data.buffer,0,2), body=new Uint8Array(data.buffer,8);
         try {
           let result;
           if(data.operation==='tool') result=await host.call(data.payload,{signal:controller.signal});
-          else if(data.operation==='model') {
+          else if(['model','stream-open','stream-read','stream-close'].includes(data.operation)) {
             if(!grants.has('network/model')) throw Error('missing-capabilities: network/model');
-            const requestBody=JSON.stringify(data.payload);
-            if(new TextEncoder().encode(requestBody).length>body.length) throw Error('model request exceeds byte limit');
-            const response=await fetch(endpoint,{method:'POST',headers:{...modelHeaders,'Content-Type':'application/json'},body:requestBody,signal:controller.signal,credentials:'omit',redirect:'error'});
-            const reader=response.body.getReader();const chunks=[];let length=0;
-            try {
-              for(;;) {const {done,value}=await reader.read();if(done)break;length+=value.byteLength;
-                if(length>body.length){await reader.cancel();throw Error('model response exceeds byte limit');}chunks.push(value);}
-            } finally {reader.releaseLock();}
-            const joined=new Uint8Array(length);let offset=0;for(const chunk of chunks){joined.set(chunk,offset);offset+=chunk.byteLength;}
-            result={status:response.status,body:JSON.parse(new TextDecoder().decode(joined))};
+            result=await transport.call(data.operation,data.payload);
           } else throw Error('unknown bridge operation');
           const encoded=new TextEncoder().encode(JSON.stringify({result}));
           if(encoded.length>body.length) throw Error('bridge response exceeds byte limit');
@@ -52,7 +49,26 @@ export function createHermesBrowser({capabilities = [], modelEndpoint, model, co
           body.set(encoded); Atomics.store(state,1,encoded.length); Atomics.store(state,0,1);
         } finally {Atomics.notify(state,0);}
       };
-      worker.postMessage({sourceUrl,prompt,code,model,contextLength,tools:toolDefinitions.filter(t=>grants.has(`tool/${t.function.name}`))});
+      worker.postMessage({sourceUrl,prompt,code,model,contextLength,streaming,sessionId,snapshot,tools});
+    });
+  }
+  return {async load(id){if(!grants.has('session/persist'))throw Error('missing-capabilities: session/persist');return loadSession(id);},async run(args,options={}) {
+    if(!args.sessionId)return execute(args,options);
+    if(args.code)throw Error('diagnostic code cannot persist a conversation');
+    if(typeof args.sessionId!=='string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(args.sessionId))throw Error('invalid session id');
+    if(!grants.has('session/persist'))throw Error('missing-capabilities: session/persist');
+    return navigator.locks.request('kuro/hermes/session/'+args.sessionId,{ifAvailable:true},async lock=>{
+      if(!lock)throw Error('session already has an active turn');
+      const snapshot=await loadSession(args.sessionId);
+      if(snapshot && snapshot.identity!==identity)throw Error('saved session runtime identity differs');
+      const result=await execute({...args,snapshot},options);
+      if(result.completed && !result.failed && !result.partial && !result.interrupted) {
+        if(options.signal?.aborted)throw Error('cancelled before session commit');
+        await commitSession({version:1,id:args.sessionId,revision:(snapshot?.revision||0)+1,identity,
+          messages:result.messages,systemPrompt:result.browserSystemPrompt,updatedAt:Date.now()},snapshot?.revision||0);
+        result.saved=true;
+      } else result.saved=false;
+      return result;
     });
   }};
 }

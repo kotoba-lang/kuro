@@ -344,5 +344,7 @@ can be entirely dead on the other.
 The [Hermes browser profile](docs/verification/hermes-browser-profile.md) adds
 locked Wasm-compatible dependencies, browser model transport, serial execution,
 and Kuro JS/Python tools to the original Hermes conversation loop. Local Chromium
-qualification uses a model fixture; live inference and native process tools are
-not qualified. Reproduce with `prepare:hermes-browser` and `test:hermes-browser`.
+qualification uses a model fixture. [Streaming and browser conversation
+restart/resume](docs/verification/hermes-browser-streaming.md) are verified;
+real-model qualification is recorded separately. Native process tools are not
+qualified. Reproduce with `prepare:hermes-browser` and `test:hermes-browser`.

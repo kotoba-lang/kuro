@@ -22,6 +22,7 @@ self.onmessage=async ({data})=>{
   if(digest!==sourceManifest.sha256 || sourceManifest.revision!=='4f649c65e35beed816f9a9ec5647d33133a25abf') throw Error('unqualified Hermes source snapshot');
   py.globals.set('_kuro_archive',py.toPy(new Uint8Array(archive)));
   py.globals.set('_kuro_rpc',rpc);
+  py.globals.set('_kuro_emit',(event,text)=>{if(typeof text==='string' && text)self.postMessage({kind:'event',event,text});});
   py.globals.set('_kuro_inputs',py.toPy(data));
   const adapter=await (await fetch(new URL('./hermes-adapter.py',self.location.href))).text();
   await py.runPythonAsync(adapter);

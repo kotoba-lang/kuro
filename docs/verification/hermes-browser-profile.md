@@ -46,7 +46,8 @@ For a custom Chromium binary, set `KURO_CHROMIUM_PATH`.
   envelope. No terminal/subprocess/browser automation tool is advertised.
 - Each run has a fresh runtime and ephemeral Hermes home. Abort or deadline
   terminates the Hermes Worker, aborts model fetch and cancels child tool calls.
-  Cancellation discards this session; resumable persistence is not implemented.
+  Cancellation discards the in-flight turn; browser sessions retain the last
+  committed conversation for restart/resume when `session/persist` is granted.
 
 ## Verification and limits
 
@@ -57,8 +58,9 @@ model request → final answer. The system prompt remains byte-identical across
 the two model requests. A pending model request can be cancelled while the UI
 continues ticking. Missing `network/model` denies model access.
 
-The model fixture is deterministic, not live inference. Streaming, multiple
-conversation turns, compression, durable sessions, memory/background review,
+The model fixture is deterministic, not live inference. See [hermes-browser-streaming.md](hermes-browser-streaming.md) for subsequently
+qualified SSE streaming and saved conversation restart/resume. Compression,
+full native session persistence, memory/background review,
 subagents, cron, remote backends, and native process tools are not qualified.
 Model metadata must be configured; metadata HTTP probes are explicitly disabled.
 A guarded transformation in the ephemeral source disables process-liveness

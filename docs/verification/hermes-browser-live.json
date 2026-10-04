@@ -1,0 +1,154 @@
+{
+  "model": "mishima",
+  "modelFixture": false,
+  "attempts": [
+    {
+      "stream": true,
+      "roles": [
+        "system",
+        "user"
+      ],
+      "toolResults": [],
+      "requestedAt": "2026-10-04T04:07:01.914Z",
+      "status": 502,
+      "responseBytes": 95,
+      "error": {
+        "code": "mishima_unreachable",
+        "type": "api_error",
+        "message": "destination_unavailable"
+      },
+      "relayExit": 0
+    },
+    {
+      "stream": true,
+      "roles": [
+        "system",
+        "user"
+      ],
+      "toolResults": [],
+      "requestedAt": "2026-10-04T04:07:05.784Z",
+      "status": 502,
+      "responseBytes": 95,
+      "error": {
+        "code": "mishima_unreachable",
+        "type": "api_error",
+        "message": "destination_unavailable"
+      },
+      "relayExit": 0
+    },
+    {
+      "stream": true,
+      "roles": [
+        "system",
+        "user"
+      ],
+      "toolResults": [],
+      "requestedAt": "2026-10-04T04:07:10.706Z",
+      "status": 502,
+      "responseBytes": 95,
+      "error": {
+        "code": "mishima_unreachable",
+        "type": "api_error",
+        "message": "destination_unavailable"
+      },
+      "relayExit": 0
+    },
+    {
+      "stream": true,
+      "roles": [
+        "system",
+        "user"
+      ],
+      "toolResults": [],
+      "requestedAt": "2026-10-04T04:07:27.903Z",
+      "status": 502,
+      "responseBytes": 95,
+      "error": {
+        "code": "mishima_unreachable",
+        "type": "api_error",
+        "message": "destination_unavailable"
+      },
+      "relayExit": 0
+    },
+    {
+      "stream": true,
+      "roles": [
+        "system",
+        "user"
+      ],
+      "toolResults": [],
+      "requestedAt": "2026-10-04T04:07:30.687Z",
+      "status": 502,
+      "responseBytes": 95,
+      "error": {
+        "code": "mishima_unreachable",
+        "type": "api_error",
+        "message": "destination_unavailable"
+      },
+      "relayExit": 0
+    },
+    {
+      "stream": true,
+      "roles": [
+        "system",
+        "user"
+      ],
+      "toolResults": [],
+      "requestedAt": "2026-10-04T04:07:37.065Z",
+      "status": 502,
+      "responseBytes": 95,
+      "error": {
+        "code": "mishima_unreachable",
+        "type": "api_error",
+        "message": "destination_unavailable"
+      },
+      "relayExit": 0
+    },
+    {
+      "stream": true,
+      "roles": [
+        "system",
+        "user"
+      ],
+      "toolResults": [],
+      "requestedAt": "2026-10-04T04:08:12.031Z",
+      "status": 502,
+      "responseBytes": 95,
+      "error": {
+        "code": "mishima_unreachable",
+        "type": "api_error",
+        "message": "destination_unavailable"
+      },
+      "relayExit": 0
+    },
+    {
+      "stream": true,
+      "roles": [
+        "system",
+        "user"
+      ],
+      "toolResults": [],
+      "requestedAt": "2026-10-04T04:08:16.191Z",
+      "status": 502,
+      "responseBytes": 95,
+      "error": {
+        "code": "mishima_unreachable",
+        "type": "api_error",
+        "message": "destination_unavailable"
+      },
+      "relayExit": 0
+    }
+  ],
+  "status": "blocked",
+  "browser": {
+    "error": "Hermes deadline exceeded"
+  },
+  "toolResults": [],
+  "liveToolRoundTrip": false,
+  "provenance": {
+    "revision": "4f649c65e35beed816f9a9ec5647d33133a25abf",
+    "sha256": "b13d47333b965d00b1e841702194f53b741c37aea834f93bb9d3bab7d2c7b603",
+    "files": 2083
+  },
+  "sourceSha256": "a6de16bb6eb800845d0b866136084921ebab0ada1142f4d41ab841878574a88a"
+}

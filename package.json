@@ -10,7 +10,9 @@
     "test:host": "kbb --backend sci --classpath src:test:test/cljs-shims test/run_host_tests.cljk",
     "test:parity": "kbb --backend sci --classpath src:test:test/cljs-shims test/run_parity_tests.cljk",
     "prepare:hermes-browser": "node scripts/prepare-hermes-browser.mjs",
-    "test:hermes-browser": "npm run build:browser-tools && node scripts/verify-hermes-adapter.mjs"
+    "test:hermes-browser": "npm run build:browser-tools && node scripts/verify-hermes-adapter.mjs",
+    "test:hermes-streaming": "npm run build:browser-tools && node scripts/verify-hermes-streaming.mjs",
+    "test:hermes-live": "npm run build:browser-tools && node scripts/verify-hermes-live.mjs"
   },
   "devDependencies": {
     "esbuild": "0.25.12",

@@ -4,3 +4,4 @@ test/browser/.tmp/
 .shadow-cljs/
 .nbb/
 target/browser-tools/
+target/hermes-browser-profile-*/

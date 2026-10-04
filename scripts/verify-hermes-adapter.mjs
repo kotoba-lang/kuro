@@ -15,7 +15,7 @@ const {server,url}=await serve(undefined,0,{handleRequest: async(req,res)=>{
   results.length ? {role:'assistant',content:'Both browser tools returned 42.'} :
   {role:'assistant',content:null,tool_calls:['js','python'].map((name,i)=>({id:`call-${i}`,type:'function',function:{name,arguments:JSON.stringify({code:name==='js'?'21 * 2':'sum([20, 22])'})}}))};
  res.writeHead(200,{'Content-Type':'application/json'});
- res.end(JSON.stringify({id:'browser-fixture',object:'chat.completion',created:1,model:'browser-fixture',choices:[{index:0,message,finish_reason:message.tool_calls?'tool_calls':'stop'}],usage:{prompt_tokens:100,completion_tokens:10,total_tokens:110}}));return true;
+ res.end(JSON.stringify({id:'browser-fixture',object:'chat.completion',created:1,model:'browser-fixture',streaming:false,choices:[{index:0,message,finish_reason:message.tool_calls?'tool_calls':'stop'}],usage:{prompt_tokens:100,completion_tokens:10,total_tokens:110}}));return true;
 }});
 let browser;
 try {
@@ -26,7 +26,7 @@ try {
  await page.goto(url);
  const result=await page.evaluate(async()=>{
   const {createHermesBrowser}=await import('./hermes.js');
-  const host=createHermesBrowser({capabilities:['tool/js','tool/python','tool/python-js-bridge','network/model'],modelEndpoint:'/hermes-probe-model.json',model:'browser-fixture'});
+  const host=createHermesBrowser({capabilities:['tool/js','tool/python','tool/python-js-bridge','network/model'],modelEndpoint:'/hermes-probe-model.json',model:'browser-fixture',streaming:false});
   return host.run({sourceUrl:location.origin+'/hermes-probe-source.tar.gz',code:`
 report = {'checks': {}}
 def check(name, fn):
@@ -60,7 +60,7 @@ report
    const {createHermesBrowser}=await import('./hermes.js');
    window.cancelController=new AbortController();window.uiTicks=0;
    window.uiTimer=setInterval(()=>window.uiTicks++,10);
-   const host=createHermesBrowser({model:'browser-fixture',capabilities:['tool/python','tool/python-js-bridge','network/model'],modelEndpoint:'/hermes-probe-model.json'});
+   const host=createHermesBrowser({model:'browser-fixture',streaming:false,capabilities:['tool/python','tool/python-js-bridge','network/model'],modelEndpoint:'/hermes-probe-model.json'});
    window.cancelResult=host.run({code:"bridge('model', {'messages': [{'role':'user','content':'cancel-test'}]})"},{signal:window.cancelController.signal}).then(()=>({cancelled:false}),error=>({cancelled:error.message==='cancelled'}));
  });
  await Promise.race([cancellationRequest,new Promise((_,reject)=>setTimeout(()=>reject(Error('cancellation fixture was not reached')),20000))]);
@@ -69,7 +69,7 @@ report
  result.checks.cancellation={ok:true,value:cancelled};
  const denied=await page.evaluate(async()=>{
    const {createHermesBrowser}=await import('./hermes.js');
-   const host=createHermesBrowser({model:'browser-fixture',capabilities:['tool/python','tool/python-js-bridge'],modelEndpoint:'/hermes-probe-model.json'});
+   const host=createHermesBrowser({model:'browser-fixture',streaming:false,capabilities:['tool/python','tool/python-js-bridge'],modelEndpoint:'/hermes-probe-model.json'});
    try {await host.run({code:"bridge('model', {'messages': []})"});return false;}catch(error){return error.message.includes('missing-capabilities: network/model');}
  });
  assert.equal(denied,true);result.checks.network_denial={ok:true};
