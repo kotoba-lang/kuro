@@ -64,28 +64,34 @@ does not certify live inference.
 
 ## Real-model qualification
 
+The relay uses Hugging Face **dedicated Inference Endpoints**, with the
+OpenAI-compatible `/v1/chat/completions` API. The served model must support
+streaming and function tool calls. No inference router or Murakumo fallback is used.
+API reference: https://huggingface.co/docs/text-generation-inference/en/reference/api_reference
+
 ```sh
-npm run test:hermes-live -- /path/to/native/hermes-agent mishima
+# Set HF_TOKEN in the local environment, or point HF_TOKEN_PATH to a private
+# token file. Otherwise the standard HF_HOME/token cache is used.
+npm run test:hermes-live -- /path/to/native/hermes-agent https://<id>.<region>.aws.endpoints.huggingface.cloud served-model
+npm run serve:hermes-hf -- /path/to/native/hermes-agent https://<id>.<region>.aws.endpoints.huggingface.cloud served-model
+# Open the printed localhost /hermes.html URL; model settings are prefilled.
 ```
 
-The native checkout's `venv/bin/python` resolves its configured custom-provider
-credentials and relays the actual HTTP/SSE response. Credentials stay in that
-native process and are not emitted, serialized into the browser Worker, or
-stored in IndexedDB. The relay binds only localhost and accepts same-origin
-POSTs for the selected model. It is a local verification helper, not a production
-credential proxy. Abort closes the upstream process/request.
+The native checkout supplies only its `venv/bin/python` and HTTPX dependency;
+its model/provider configuration is not read or changed. Tokens stay in the
+native relay process, never the Worker, UI, logs or IndexedDB. The relay only
+accepts localhost Host headers and same-origin POSTs, pins the dedicated HF
+hostname and selected model, bounds inputs/outputs and total request time,
+refuses redirects, and cancels upstream work on disconnect. It is a local
+helper rather than a deployed public credential proxy.
 
-The live test uses the actual model's tool selection and results and passes
-only after real JS/Python round trips, streaming deltas and a completed turn.
-`hermes-browser-live.json` records the observed result, including upstream
-failure status; failed qualification is not converted to a mock success.
+The live test passes only after actual model-selected JS and Python tool
+results, visible streaming deltas, and a completed conversation turn.
+`hermes-browser-live.json` records upstream failure rather than fixture success.
 
-Observed live attempt on 2026-10-04: authenticated browser→local relay→
-`https://api.murakumo.cloud/v1/chat/completions` with model `mishima` returned
-HTTP 502, `mishima_unreachable` / `destination_unavailable` on every bounded
-attempt. The outer browser deadline stopped the turn; no live model/tool round
-trip or saved live conversation was achieved. The catalog's `murakumo/free`
-route returned the same upstream failure. A Qwen catalog route returned 401
-`invalid_credential`; localhost Ollama/LM Studio endpoints were unavailable.
-No credential or infrastructure configuration was changed. A reachable,
-authorized model route is required to finish live qualification.
+Observed on 2026-10-04: the existing dedicated Endpoint returned HTTP 401
+`UNAUTHORIZED`. Hermes reported a failed turn, emitted no visible text deltas,
+ran no tools, and did not commit a session. Both cached tokens also returned
+401 from the endpoint management API. A currently authorized token and reachable,
+tool-capable Endpoint are required to finish live qualification. No Endpoint
+was provisioned or reconfigured and no provider credential was changed.

@@ -12,7 +12,8 @@
     "prepare:hermes-browser": "node scripts/prepare-hermes-browser.mjs",
     "test:hermes-browser": "npm run build:browser-tools && node scripts/verify-hermes-adapter.mjs",
     "test:hermes-streaming": "npm run build:browser-tools && node scripts/verify-hermes-streaming.mjs",
-    "test:hermes-live": "npm run build:browser-tools && node scripts/verify-hermes-live.mjs"
+    "test:hermes-live": "npm run build:browser-tools && node scripts/verify-hermes-live.mjs",
+    "serve:hermes-hf": "node scripts/serve-hermes-hf.mjs"
   },
   "devDependencies": {
     "esbuild": "0.25.12",

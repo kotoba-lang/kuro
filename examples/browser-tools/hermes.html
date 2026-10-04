@@ -1,7 +1,7 @@
 <!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Hermes browser</title>
 <style>body{font:16px system-ui;max-width:760px;margin:40px auto;padding:0 20px;background:#fafaf8;color:#222}label{display:block;margin:16px 0}input,textarea,button{font:inherit;padding:10px;box-sizing:border-box}input,textarea{width:100%;border:1px solid #bbb;border-radius:6px}textarea{min-height:100px}button{cursor:pointer}pre{white-space:pre-wrap;background:white;padding:20px;border-radius:8px;min-height:120px}small{color:#555}</style>
 <h1>Hermes browser</h1><p>ブラウザで応答を受け取り、JS・Python を実行します。会話はこのブラウザに保存されます。</p>
-<label>モデル接続先<input id="endpoint" value="/live-model"></label><label>モデル<input id="model" value="mishima"></label>
+<label>モデル接続先<input id="endpoint" value="/live-model"></label><label>モデル<input id="model" value="your-endpoint-model"></label>
 <label>会話の名前<input id="session" value="my-conversation" pattern="[a-zA-Z0-9_-]+"></label>
 <label>メッセージ<textarea id="prompt" placeholder="JS と Python で 21 × 2 を計算して"></textarea></label>
 <button id="run">送信</button> <button id="stop" disabled>停止</button> <button id="restore">保存した会話を見る</button>
@@ -10,6 +10,7 @@
 <script type="module">
 import {createHermesBrowser} from './hermes.js';
 const el=id=>document.getElementById(id);let controller;
+try{const response=await fetch('./live-model-config');if(response.ok){const config=await response.json();el('model').value=config.model;el('endpoint').value=config.modelEndpoint;el('status').textContent='Hugging Face に接続します。';}}catch{}
 const host=()=>createHermesBrowser({modelEndpoint:el('endpoint').value,model:el('model').value,capabilities:['tool/js','tool/python','tool/python-js-bridge','network/model','session/persist']});
 el('run').onclick=async()=>{
  el('run').disabled=true;el('restore').disabled=true;el('stop').disabled=false;el('output').textContent='';el('status').textContent='応答を待っています…';controller=new AbortController();

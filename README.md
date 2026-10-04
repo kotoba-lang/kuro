@@ -276,7 +276,7 @@ nothing about fs/read (separate leaves).
   postMessages a start request, and the guest's memory and i32 exit code cross
   the worker boundary as a `kuro.stream` stdout chunk and an exit message
 
-See `test/browser/verify_*.cljs` (one file per entry above) and ADR-2609041240.
+See `test/browser/verify_*.cljk` (one file per entry above) and ADR-2609041240.
 
 ## Browser JS / Python function tools
 
@@ -348,3 +348,8 @@ qualification uses a model fixture. [Streaming and browser conversation
 restart/resume](docs/verification/hermes-browser-streaming.md) are verified;
 real-model qualification is recorded separately. Native process tools are not
 qualified. Reproduce with `prepare:hermes-browser` and `test:hermes-browser`.
+
+The browser Hermes local relay uses Hugging Face dedicated Inference Endpoints.
+See [connection and verification instructions](docs/verification/hermes-browser-streaming.md#real-model-qualification).
+Live inference remains unqualified until the Endpoint accepts an authorized token;
+the recorded live attempt returned 401. Browser fixture tests do not prove live inference.

@@ -1,34 +1,19 @@
-// Explicit real inference through the user's configured native Hermes route.
+// Real inference through an explicitly selected Hugging Face dedicated Endpoint.
 import {chromium} from 'playwright';
-import {spawn} from 'node:child_process';
 import {readFile,writeFile} from 'node:fs/promises';
-import {resolve} from 'node:path';
 import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 import {serve} from './serve-browser-tools.mjs';
-const source=process.argv[2];if(!source)throw Error('Usage: node scripts/verify-hermes-live.mjs /path/to/native/hermes [model]');
-const model=process.argv[3]||'mishima';
-const evidence={model,modelFixture:false,attempts:[],status:'started'};
-const active=new Set();
-const {server,url}=await serve(undefined,0,{handleRequest:async(req,res)=>{
- if(req.url!=='/live-model')return false;
- if(req.method!=='POST' || req.headers.origin!=='http://'+req.headers.host){res.writeHead(403);res.end();return true;}
- const incoming=[];let inputBytes=0;for await(const c of req){inputBytes+=c.length;if(inputBytes>1048576){res.writeHead(413);res.end();return true;}incoming.push(c);}
- const body=Buffer.concat(incoming).toString('utf8');const payload=JSON.parse(body);if(payload.model!==model){res.writeHead(403);res.end();return true;}
- const attempt={stream:payload.stream,roles:payload.messages.map(m=>m.role),toolResults:payload.messages.filter(m=>m.role==='tool'),requestedAt:new Date().toISOString()};evidence.attempts.push(attempt);
- const child=spawn(resolve(source,'venv/bin/python'),[resolve('scripts/hermes-model-relay.py'),source,model],{stdio:['pipe','pipe','ignore']});active.add(child);
- child.stdin.end(body);let metadata=Buffer.alloc(0),started=false,errorBody='';
- child.stdout.on('data',chunk=>{
-  if(!started){metadata=Buffer.concat([metadata,chunk]);const newline=metadata.indexOf(10);if(newline<0)return;
-   let head;try{head=JSON.parse(metadata.subarray(0,newline));}catch{child.kill();res.writeHead(502);res.end();return;}
-   attempt.status=head.status;started=true;res.writeHead(head.status,{'Content-Type':head.contentType,'Cache-Control':'no-store'});res.flushHeaders();chunk=metadata.subarray(newline+1);
-  }
-  if(chunk.length){if(attempt.status>=400 && errorBody.length<4096)errorBody+=chunk.toString('utf8');attempt.responseBytes=(attempt.responseBytes||0)+chunk.length;res.write(chunk);}
- });
- child.on('error',()=>{if(!started)res.writeHead(502);res.end();active.delete(child);});
- child.on('close',code=>{try{const e=JSON.parse(errorBody).error;attempt.error={code:e.code,type:e.type,message:e.message};}catch{}if(!started){res.writeHead(502,{'Content-Type':'application/json'});res.end(JSON.stringify({error:{type:'relay_error',code:'native_runtime_unavailable'}}));}else res.end();attempt.relayExit=code;active.delete(child);});
- res.on('close',()=>{if(!res.writableEnded)child.kill();});return true;
-}});
+import {createHuggingFaceRelay} from './huggingface-relay.mjs';
+const source=process.argv[2];if(!source)throw Error('Usage: node scripts/verify-hermes-live.mjs /path/to/native/hermes <endpoint-url> <model>');
+const endpoint=process.argv[3]||process.env.HF_ENDPOINT_URL;
+const model=process.argv[4]||process.env.HF_MODEL;
+if(!endpoint||!model)throw Error('HF endpoint URL and served model are required');
+const route=new URL(endpoint);
+if(route.protocol!=='https:'||!route.hostname.endsWith('.endpoints.huggingface.cloud')||route.username||route.password||route.search||route.hash||route.port)throw Error('expected HF dedicated Endpoint URL');
+const evidence={provider:'huggingface-endpoints',endpoint,model,modelFixture:false,attempts:[],status:'started'};
+const relay=createHuggingFaceRelay({source,endpoint,model,evidence});
+const {server,url}=await serve(undefined,0,{handleRequest:relay.handleRequest});
 let browser;
 try {
  browser=await chromium.launch({headless:true,executablePath:process.env.KURO_CHROMIUM_PATH});
@@ -49,4 +34,4 @@ try {
  await writeFile('docs/verification/hermes-browser-live.json',JSON.stringify(evidence,null,2)+'\n');
  console.log(JSON.stringify({status:evidence.status,model,attempts:evidence.attempts.map(a=>({status:a.status,stream:a.stream})),browser:evidence.browser,liveToolRoundTrip:evidence.liveToolRoundTrip}));
  assert.equal(evidence.status,'qualified','real model qualification failed; inspect recorded evidence');
-}finally{for(const child of active)child.kill();await browser?.close();server.closeAllConnections();await new Promise(r=>server.close(r));}
+}finally{relay.close();await browser?.close();server.closeAllConnections();await new Promise(r=>server.close(r));}

@@ -6,6 +6,7 @@ export function serve(root = resolve('target/browser-tools'), port = 0, {handleR
   root = resolve(root);
   const server = http.createServer(async (req, res) => {
     try {
+      if(req.headers.host !== `127.0.0.1:${server.address().port}`){res.writeHead(403);res.end();return;}
       if (handleRequest && await handleRequest(req, res)) return;
       const url = new URL(req.url, 'http://localhost');
       const file = resolve(root, '.' + decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname));

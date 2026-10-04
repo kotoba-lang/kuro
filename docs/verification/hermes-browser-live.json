@@ -1,5 +1,7 @@
 {
-  "model": "mishima",
+  "provider": "huggingface-endpoints",
+  "endpoint": "https://obnct428kmjxul06.us-east-2.aws.endpoints.huggingface.cloud",
+  "model": "qwen3.8-flash-next-uncensored-iq4-xs",
   "modelFixture": false,
   "attempts": [
     {
@@ -9,139 +11,24 @@
         "user"
       ],
       "toolResults": [],
-      "requestedAt": "2026-10-04T04:07:01.914Z",
-      "status": 502,
-      "responseBytes": 95,
+      "requestedAt": "2026-10-04T04:45:42.314Z",
+      "status": 401,
+      "responseBytes": 50,
       "error": {
-        "code": "mishima_unreachable",
-        "type": "api_error",
-        "message": "destination_unavailable"
-      },
-      "relayExit": 0
-    },
-    {
-      "stream": true,
-      "roles": [
-        "system",
-        "user"
-      ],
-      "toolResults": [],
-      "requestedAt": "2026-10-04T04:07:05.784Z",
-      "status": 502,
-      "responseBytes": 95,
-      "error": {
-        "code": "mishima_unreachable",
-        "type": "api_error",
-        "message": "destination_unavailable"
-      },
-      "relayExit": 0
-    },
-    {
-      "stream": true,
-      "roles": [
-        "system",
-        "user"
-      ],
-      "toolResults": [],
-      "requestedAt": "2026-10-04T04:07:10.706Z",
-      "status": 502,
-      "responseBytes": 95,
-      "error": {
-        "code": "mishima_unreachable",
-        "type": "api_error",
-        "message": "destination_unavailable"
-      },
-      "relayExit": 0
-    },
-    {
-      "stream": true,
-      "roles": [
-        "system",
-        "user"
-      ],
-      "toolResults": [],
-      "requestedAt": "2026-10-04T04:07:27.903Z",
-      "status": 502,
-      "responseBytes": 95,
-      "error": {
-        "code": "mishima_unreachable",
-        "type": "api_error",
-        "message": "destination_unavailable"
-      },
-      "relayExit": 0
-    },
-    {
-      "stream": true,
-      "roles": [
-        "system",
-        "user"
-      ],
-      "toolResults": [],
-      "requestedAt": "2026-10-04T04:07:30.687Z",
-      "status": 502,
-      "responseBytes": 95,
-      "error": {
-        "code": "mishima_unreachable",
-        "type": "api_error",
-        "message": "destination_unavailable"
-      },
-      "relayExit": 0
-    },
-    {
-      "stream": true,
-      "roles": [
-        "system",
-        "user"
-      ],
-      "toolResults": [],
-      "requestedAt": "2026-10-04T04:07:37.065Z",
-      "status": 502,
-      "responseBytes": 95,
-      "error": {
-        "code": "mishima_unreachable",
-        "type": "api_error",
-        "message": "destination_unavailable"
-      },
-      "relayExit": 0
-    },
-    {
-      "stream": true,
-      "roles": [
-        "system",
-        "user"
-      ],
-      "toolResults": [],
-      "requestedAt": "2026-10-04T04:08:12.031Z",
-      "status": 502,
-      "responseBytes": 95,
-      "error": {
-        "code": "mishima_unreachable",
-        "type": "api_error",
-        "message": "destination_unavailable"
-      },
-      "relayExit": 0
-    },
-    {
-      "stream": true,
-      "roles": [
-        "system",
-        "user"
-      ],
-      "toolResults": [],
-      "requestedAt": "2026-10-04T04:08:16.191Z",
-      "status": 502,
-      "responseBytes": 95,
-      "error": {
-        "code": "mishima_unreachable",
-        "type": "api_error",
-        "message": "destination_unavailable"
+        "code": "UNAUTHORIZED",
+        "message": "401 Unauthorized"
       },
       "relayExit": 0
     }
   ],
   "status": "blocked",
   "browser": {
-    "error": "Hermes deadline exceeded"
+    "completed": false,
+    "failed": true,
+    "final": "custom rejected your API key, so the model can't be reached. Update it in Settings → Providers, or run `hermes setup` in a terminal.\n\nProvider said: HTTP 401: {\"error\":\"401 Unauthorized\",\"code\":\"UNAUTHORIZED\"}",
+    "streamedText": "",
+    "deltas": 0,
+    "saved": false
   },
   "toolResults": [],
   "liveToolRoundTrip": false,

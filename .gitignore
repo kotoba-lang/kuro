@@ -5,3 +5,4 @@ test/browser/.tmp/
 .nbb/
 target/browser-tools/
 target/hermes-browser-profile-*/
+target/shadow-cljk/

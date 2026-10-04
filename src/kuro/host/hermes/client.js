@@ -14,7 +14,7 @@ export function createHermesBrowser({capabilities = [], modelEndpoint, model, co
   if (!['http:', 'https:'].includes(endpoint.protocol) || endpoint.username || endpoint.password) throw Error('invalid model endpoint');
   const host = createToolHost({capabilities, timeoutMs: Math.min(timeoutMs, 30000)});
   const tools=toolDefinitions.filter(t=>grants.has(`tool/${t.function.name}`));
-  const identity=JSON.stringify({model,endpoint:endpoint.origin+endpoint.pathname,contextLength,tools:tools.map(t=>t.function.name),profile:'4f649c65-v2'});
+  const identity=JSON.stringify({model,endpoint:endpoint.origin+endpoint.pathname+endpoint.search,contextLength,tools:tools.map(t=>t.function.name),profile:'4f649c65-v2'});
   async function execute({sourceUrl,prompt,code,sessionId,snapshot}, {signal,onDelta,onReasoning}={}) {
     sourceUrl = new URL(sourceUrl || './hermes-probe-source.tar.gz', import.meta.url).href;
     if(new URL(sourceUrl).origin !== location.origin) throw Error('source must be served on the application origin');
