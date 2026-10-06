@@ -52,4 +52,22 @@
              (check (= :filesystem-read-denied (:error denied)) "FS denial")
              (check (= 1 (count @seen)) "denied FS must not call worker")
              (println "PASS: tool adapter session grants, fixed receipt, JSON keys and kuro.fs round-trip/denial")))
+    (.then (fn [_]
+             (let [fail-factory (fn [_]
+                                  #js {:call (fn [_ _]
+                                               (js/Promise.resolve
+                                                #js {:id "call-2" :result #js {}
+                                                     :files #js {"leaked/out.txt" "must not be imported"}
+                                                     :receipt #js {"kuro/argv" #js ["browser-tool" "js"]
+                                                                   "kuro/isolation" "quickjs-wasm-worker"
+                                                                   "kuro/exit-code" 1
+                                                                   "kuro/stdout" ""}}))})
+                   fail-adapter (tools/create session fail-factory {})
+                   blocks-before (count @blocks)]
+               (-> (tools/call-with-filesystem fail-adapter request initial
+                                               {:read-paths ["in.txt"] :get-block get-block :put-block put-block})
+                   (.then (fn [response]
+                            (check (= 1 (get-in response [:receipt :kuro/exit-code])) "failed exit code")
+                            (check (= blocks-before (count @blocks)) "failed call imports nothing")
+                            (println "PASS: failed tool call imports nothing")))))))
     (.catch (fn [error] (js/console.error error) (set! (.-exitCode js/process) 1))))
