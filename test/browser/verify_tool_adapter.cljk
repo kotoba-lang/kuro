@@ -70,4 +70,26 @@
                             (check (= 1 (get-in response [:receipt :kuro/exit-code])) "failed exit code")
                             (check (= blocks-before (count @blocks)) "failed call imports nothing")
                             (println "PASS: failed tool call imports nothing")))))))
+    (.then (fn [_]
+             ;; A successful tool call whose exported file lands outside the
+             ;; store's fs/write grant: the export is a denial, not a write.
+             (let [export-factory (fn [_]
+                                    #js {:call (fn [_ _]
+                                                 (js/Promise.resolve
+                                                  #js {:id "call-3" :result #js {}
+                                                       :files #js {"denied/out.txt" "must not be written"}
+                                                       :receipt #js {"kuro/argv" #js ["browser-tool" "js"]
+                                                                     "kuro/isolation" "quickjs-wasm-worker"
+                                                                     "kuro/exit-code" 0
+                                                                     "kuro/stdout" ""}}))})
+                   export-adapter (tools/create session export-factory {})
+                   blocks-before (count @blocks)]
+               (-> (tools/call-with-filesystem export-adapter request (fs/with-grant initial #{"fs/read"})
+                                               {:read-paths [] :get-block get-block :put-block put-block})
+                   (.then (fn [response]
+                            (check (= :filesystem-write-denied (:error response)) "FS write denial")
+                            (check (= blocks-before (count @blocks)) "denied export stores no block")
+                            (check (nil? (second (fs/read-file (:store response) "denied/out.txt" get-block)))
+                                   "denied export imports nothing")
+                            (println "PASS: write-denied export imports nothing")))))))
     (.catch (fn [error] (js/console.error error) (set! (.-exitCode js/process) 1))))
