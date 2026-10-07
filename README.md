@@ -173,6 +173,47 @@ Two things it refuses to pretend:
 `:kuro.checkpoint/dropped-bytes`; the byte counters keep the pre-truncation
 truth. Off by default — capping is the storage's business, not this layer's.
 
+## Long-running sessions — `kuro.host.supervisor`
+
+`kuro.host.stream-node` gives you one live handle per command and leaves the
+bookkeeping to you. `kuro.host.supervisor` is a registry above that: it spawns
+under a name, streams output into the registry, and keeps sessions addressable
+while they run and after they exit.
+
+```clojure
+(require '[kuro.host.supervisor :as sup])
+
+(def s (sup/new-supervisor))
+(sup/start! s "build" session (t/command ["npm" "test"])
+            {:repo-root "." :on-exit (fn [receipt] ...)})
+
+(sup/session-states s)        ; => {"build" :running}
+(sup/read-window s "build")   ; the chunks streamed since the last read
+(sup/receipt-of s "build")    ; the receipt, once the process has exited
+```
+
+### What it enforces
+
+| guarantee | mechanism |
+|---|---|
+| no session on denial | a grant denial in `start!` registers nothing and creates no child |
+| exact-once delivery per window | `read-window` advances the window cursor (tmux semantics) — re-reading a window does not replay |
+| detach is honest | `detach-window!` stops delivery, **not** the child; output keeps accumulating in the registry and the gap is readable later |
+| attach is forward-only | `attach-window!` / `reattach-window!` start at the current position — nothing already streamed is replayed, nothing after is lost |
+| restore is honest | restoring a `snapshot` into a fresh supervisor yields `:orphaned` with `:suspended` attachments — never `:running` — because the process did not survive |
+| no invented receipts | `kill!` on a restored (handle-less) session marks it finished **without a receipt**; a process this host never ran has no host-measured exit values |
+| names and windows are distinct | `start!` binds the session under `name` and the window under `:window-id` (default `name`); a caller-supplied `:window-id` is the attachment id, while state and receipts stay keyed by session name |
+
+### What it does not do
+
+- **Persistence is the caller's job.** The supervisor is an in-memory registry;
+  bridging to `kuro.checkpoint` / disk is explicit (`sup/snapshot` produces the
+  EDN-able value; nothing writes it for you).
+- It is still a pipe, not a PTY — everything in *Not a PTY* above applies.
+- Receipts still carry `:kuro/isolation` and only declared `:kuro/*` keys; the
+  supervisor neither widens them nor bypasses the grant check.
+
+
 ## Reading real output — ANSI escape sequences (`kuro.ansi`)
 
 Command output is not plain text. `kuro.ansi` turns it into styled lines.
