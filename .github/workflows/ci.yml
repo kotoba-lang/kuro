@@ -53,10 +53,25 @@ jobs:
           path: kbb-deps/org-babashka-nbb
       - run: npm install --omit=dev --no-audit --no-fund --prefix kbb-deps/org-babashka-nbb
       - run: echo "$GITHUB_WORKSPACE/kbb-deps/kotoba/bin" >> "$GITHUB_PATH"
+      # The kbb engine (lib/nbb_deps.js of kotoba-lang/org-babashka-nbb)
+      # resolves :deps with a real `bb --config ... uberjar` shell call, so
+      # the host job needs the real babashka on PATH, not just kbb.
+      # #127's recipe got kbb onto PATH but the engine's first bb call failed:
+      # 2026-09-23 runs 35850860530 (main) and 35850858840 both died at
+      # `npm run test:host` with "/bin/sh: 1: bb: not found" (issue #125,
+      # host half). The version is pinned so an upstream release cannot
+      # break this job with no diff in this repo.
+      - name: Install babashka (the kbb engine's dep resolution shells out to bb)
+        run: |
+          curl -fsSL https://github.com/babashka/babashka/releases/download/v1.13.224/babashka-1.13.224-linux-amd64-static.tar.gz -o /tmp/bb.tar.gz
+          tar -xzf /tmp/bb.tar.gz -C /tmp
+          sudo install /tmp/bb /usr/local/bin/bb
+          bb --version
       - run: npm install
       # The Node host provider. This one actually spawns processes, so it is
       # the gate that proves a receipt describes a command that really ran.
       - run: npm run test:host
+      - run: npm run test:tool-adapter
       # The SAME .cljc suites under ClojureScript. kuro.ansi was JVM-green and
       # cljs-broken for a day because nothing ran the portable code on the
       # runtime the consumers actually use.
@@ -100,6 +115,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      # stock nbb reads nbb.edn and shells out to bb for its pinned deps.
+      - name: Install babashka for browser harness dependency resolution
+        run: |
+          curl -fsSL https://github.com/babashka/babashka/releases/download/v1.13.224/babashka-1.13.224-linux-amd64-static.tar.gz -o /tmp/bb.tar.gz
+          tar -xzf /tmp/bb.tar.gz -C /tmp
+          sudo install /tmp/bb /usr/local/bin/bb
       - run: npm install
       - name: Install wasm-tools
         run: |
@@ -110,44 +131,57 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
       - name: Compile the browser build
-        run: npx shadow-cljs compile fs-browser
+        run: |
+          node scripts/prepare-shadow-cljk.mjs
+          npx shadow-cljs compile fs-browser
       - name: OPFS round-trip E2E
-        run: npx nbb -cp test/browser test/browser/verify_opfs_browser.cljk
+        run: npx nbb -cp target/shadow-cljk:test/browser test/browser/verify_opfs_browser.cljk
       - name: Guest fs capability E2E
-        run: npx nbb -cp test/browser test/browser/verify_guest_fs_cap.cljk
+        run: npx nbb -cp target/shadow-cljk:test/browser test/browser/verify_guest_fs_cap.cljk
       - name: Stream browser E2E
-        run: npx nbb -cp test/browser test/browser/verify_stream_browser.cljk
+        run: npx nbb -cp target/shadow-cljk:test/browser test/browser/verify_stream_browser.cljk
       # The README "Verified end-to-end" list has five entries; each entry's
-      # proving test must run HERE. A verify_*.cljs that exists in test/browser
+      # proving test must run HERE. A verify_*.cljk that exists in test/browser
       # but has no CI step is a claim nobody runs — the exact failure mode
       # test:parity exists to prevent. The two below existed as runnable source
       # with no gate: the fs-browser shadow-cljs build is compiled above, and
       # wasm-tools is installed above, so both are gateable with no new
       # machinery.
       - name: kuro.fs in-browser E2E (fs-browser build)
-        run: npx nbb -cp test/browser test/browser/verify_fs_browser.cljk
+        run: npx nbb -cp target/shadow-cljk:test/browser test/browser/verify_fs_browser.cljk
       - name: Stream Worker-convergence E2E (guest runs inside the Worker)
-        run: npx nbb -cp test/browser test/browser/verify_stream_worker.cljk
+        run: npx nbb -cp target/shadow-cljk:test/browser test/browser/verify_stream_worker.cljk
 
       # The parity runner (test/run_parity_tests.cljk) and host runner
       # (test/run_host_tests.cljk) each carry a namespace-drift guard: a test
       # file that is never required runs nowhere yet stays green everywhere —
-      # the silent-half-green class CLAUDE.md names. The browser E2Es have no
-      # runner; each verify_*.cljs above is a standalone nbb script listed as
+      # the silent-half-green class AGENTS.md names. The browser E2Es have no
+      # runner; each verify_*.cljk above is a standalone nbb script listed as
       # its own step, so the same drift needs an explicit gate here. A
-      # verify_*.cljs that exists in test/browser but has no step in this job
+      # verify_*.cljk that exists in test/browser but has no step in this job
       # is a claim nobody runs (the failure mode this job exists to prevent) —
       # nothing else in kuro's CI would execute it.
-      - name: "Guard: every verify_*.cljs is wired into browser-e2e"
+      - name: "Guard: every verify_*.cljk is wired into CI"
         run: |
           set -euo pipefail
           cd test/browser
-          ls verify_*.cljs | sort > /tmp/verify_actual.txt
-          printf '%s\n' verify_opfs_browser.cljs verify_guest_fs_cap.cljs \
-            verify_stream_browser.cljs verify_fs_browser.cljs \
-            verify_stream_worker.cljs | sort > /tmp/verify_wired.txt
+          ls verify_*.cljk | sort > /tmp/verify_actual.txt
+          printf '%s\n' verify_opfs_browser.cljk verify_guest_fs_cap.cljk \
+            verify_stream_browser.cljk verify_fs_browser.cljk \
+            verify_stream_worker.cljk verify_tool_adapter.cljk | sort > /tmp/verify_wired.txt
           if ! diff -q /tmp/verify_wired.txt /tmp/verify_actual.txt >/dev/null; then
-            echo "BROWSER-VERIFY-DRIFT: a verify_*.cljs is present but not wired into browser-e2e"
+            echo "BROWSER-VERIFY-DRIFT: a verify_*.cljk is present but not wired into browser-e2e"
             diff /tmp/verify_wired.txt /tmp/verify_actual.txt
             exit 1
           fi
+
+  browser-tools:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser-tools

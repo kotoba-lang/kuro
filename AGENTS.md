@@ -1,4 +1,4 @@
-# CLAUDE.md — kuro
+# AGENTS.md — kuro
 
 `kuro` は kobo の **terminal** 層。session / command / grant / receipt の
 モデル（純 `.cljc`）と、それを実際に走らせる Node host（ClojureScript）。

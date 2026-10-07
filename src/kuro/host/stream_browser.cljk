@@ -12,6 +12,14 @@
       ((:write h) \"y\\n\")   ; stdin
       ((:kill h))            ; cancel the guest
 
+  **Read those two lines carefully.** The guest here is a completed
+  sync-run invocation: `kuro.host.stream_worker` accepts `stdin` and
+  `cancel` ops, acks them, and drops them - there is nothing running to
+  receive stdin or to cancel by the time you hold the handle. `:write`
+  and `:kill` exist so callers can share code with stream-node without
+  branching on the backing; they are a documented no-op here, not a
+  delivered capability. Only `:on-chunk` / `:on-exit` observe the guest.
+
   Instead of `node:child_process`.spawn it drives a **guest component**
   (compiled `.wasm`, per `kuro.host.opfs`'s block store and the
   wasm-webcomponent actor-host pattern) inside the same Worker that holds
@@ -36,7 +44,7 @@
   ## Isolation, on the record
 
   Every receipt this host produces carries
-  `:kuro/isolation :browser-origin` (CLAUDE.md rule: a receipt that does not
+  `:kuro/isolation :browser-origin` (AGENTS.md rule: a receipt that does not
   record isolation reads as if it were isolated). What that value MEANS:
 
     - the guest ran in a Worker with no DOM, no ambient authority

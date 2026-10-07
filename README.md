@@ -276,7 +276,50 @@ nothing about fs/read (separate leaves).
   postMessages a start request, and the guest's memory and i32 exit code cross
   the worker boundary as a `kuro.stream` stdout chunk and an exit message
 
-See `test/browser/verify_*.cljs` (one file per entry above) and ADR-2609041240.
+See `test/browser/verify_*.cljk` (one file per entry above) and ADR-2609041240.
+
+## Browser JS / Python function tools
+
+The browser backing can also consume agent function calls named `js` and
+`python`. Each call runs in a fresh Worker and returns JSON results, UTF-8
+stdout/stderr, selected files, and a terminal receipt. A main-thread timeout
+or AbortSignal terminates even a synchronous infinite loop.
+
+```sh
+npm ci
+npm run build:browser-tools
+npm run serve:browser-tools
+# Open http://127.0.0.1:8123
+```
+
+The build serves fixed QuickJS/Wasm and Pyodide assets locally, with no CDN.
+The Python runtime exposes its JS bridge and requires an extra
+`tool/python-js-bridge` grant; it is for trusted code on a dedicated origin.
+It does not provide untrusted-tenant network/storage confinement or a hard
+Python memory limit.
+
+```js
+import {createToolHost, toolDefinitions, toToolMessage} from './client.js';
+const host = createToolHost({capabilities: ['tool/js']});
+const response = await host.call({id: 'call_1', type: 'function', function: {
+  name: 'js', arguments: JSON.stringify({code: 'inputs.a + inputs.b', inputs: {a: 20, b: 22}})
+}});
+// response.result === 42; response.receipt['kuro/exit-code'] === 0
+const message = toToolMessage(response); // role: tool, tool_call_id: call_1
+// Pass toolDefinitions to the model and message back into its conversation.
+```
+
+`kuro.host.tool-browser/create` derives admission from a terminal session.
+Its `call-with-filesystem` adapter imports explicit paths from `kuro.fs` and
+writes explicit exports back through the existing block-store effects.
+See [the browser tools decision](docs/adr/0001-browser-js-python-tool-calls.md)
+for capability, isolation, memory, filesystem, and async boundaries.
+
+The current Hermes Agent was also probed inside this actual browser Python
+host. Its pure iteration budget works, but the unmodified agent import,
+thread-backed tool pool, and subprocess requirements are blocked. See the
+[Hermes browser verification and raw evidence](docs/verification/hermes-browser.md)
+before treating a working Python tool as a working browser-local Hermes agent.
 
 ## Tests
 
@@ -295,3 +338,18 @@ all under ClojureScript** — `(int c)` is `NaN` there, so the CSI scanner never
 found a final byte and discarded everything. The consumer that broke was
 `kobo`'s server, which runs on nbb. A `.cljc` namespace tested on one runtime
 can be entirely dead on the other.
+
+### Experimental Hermes browser profile
+
+The [Hermes browser profile](docs/verification/hermes-browser-profile.md) adds
+locked Wasm-compatible dependencies, browser model transport, serial execution,
+and Kuro JS/Python tools to the original Hermes conversation loop. Local Chromium
+qualification uses a model fixture. [Streaming and browser conversation
+restart/resume](docs/verification/hermes-browser-streaming.md) are verified;
+real-model qualification is recorded separately. Native process tools are not
+qualified. Reproduce with `prepare:hermes-browser` and `test:hermes-browser`.
+
+The browser Hermes local relay uses Hugging Face dedicated Inference Endpoints.
+See [connection and verification instructions](docs/verification/hermes-browser-streaming.md#real-model-qualification).
+Live inference remains unqualified until the Endpoint accepts an authorized token;
+the recorded live attempt returned 401. Browser fixture tests do not prove live inference.
