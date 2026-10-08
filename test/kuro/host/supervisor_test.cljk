@@ -2,6 +2,7 @@
   "async テスト。cljs.test の async を使い、コールバックが呼ばれたことを必ず
   確認する (呼ばれなければタイムアウトで落ちる)。"
   (:require [cljs.test :refer [deftest is testing async]]
+            [cljs.reader :as reader]
             [kotoba.lang.text :as str]
             [kuro.host.supervisor :as sup]
             [kuro.terminal :as t]))
@@ -109,6 +110,40 @@
                                       "the later chunk and exit never leak into the frozen copy"))
                                 (done))})))))
 
+
+(deftest snapshot-survives-an-edn-round-trip
+  (testing "README persistence contract: the caller serializes sup/snapshot.
+            Prove the snapshot is plain serializable EDN - pr-str -> read-string
+            -> restore! lands on the same honest registry (exited, chunks kept,
+            attachment suspended)."
+    (async done
+      (let [s (sup/new-supervisor)
+            s2 (sup/new-supervisor)
+            once (atom false)]
+        (sup/start! s "build" (safe)
+                    (emit "process.stdout.write('persisted\\n'); process.exit(0)")
+                    {:repo-root "."
+                     :on-exit (fn [_]
+                                (when-not @once
+                                  (reset! once true)
+                                  (let [text (pr-str (sup/snapshot s))
+                                        edn (reader/read-string text)]
+                                    (is (= (sup/snapshot s) edn)
+                                        "pr-str / read-string is identity on the snapshot")
+                                    (sup/restore! s2 edn)
+                                    (is (= {"build" :exited} (sup/session-states s2))
+                                        "the session was finished at snapshot time, so it restores finished (only :running becomes :orphaned)")
+                                    (is (= ["persisted\n"]
+                                           (mapv :text
+                                                 (get-in (sup/registry s2)
+                                                         [:kuro.registry/sessions "build" :kuro.session/stream
+                                                          :kuro/chunks])))
+                                        "the streamed output survives the round trip")
+                                    (is (= :suspended
+                                           (get-in (sup/registry s2)
+                                                   [:kuro.registry/attachments "build" :kuro.attachment/state]))
+                                        "restored attachment is suspended"))
+                                  (done)))})))))
 (deftest kill-on-a-restored-session-closes-without-a-receipt
   (testing "restored (handle-less) session: kill! marks the stream finished and
             stores no receipt — a dead process has no host-measured exit values,
