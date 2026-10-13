@@ -7,7 +7,7 @@ session, a TTY surface, or command execution with an audit trail in this
 workspace, this is the repository. The name carries none of that, which is why
 this paragraph does.
 
-`kuro.terminal` is portable Clojure/ClojureScript (`.cljc`) and contains no
+`kuro.terminal` is portable `.cljk` and contains no
 direct shell, PTY, filesystem, network, thread, or clock access. A host
 provides those effects; `kuro` defines the data contract that makes terminal
 sessions auditable.
@@ -156,7 +156,7 @@ sit on that.
 (cp/restore saved)                       ; back, as a stream
 ```
 
-Pure `.cljc`: this namespace converts, it does not persist. **Writing is the
+Pure `.cljk`: this namespace converts, it does not persist. **Writing is the
 host's job**, so the choice of file / kotobase / DataLad does not reach here.
 
 Two things it refuses to pretend:
@@ -250,7 +250,7 @@ filled differently, and the receipts say so.
 
 ### `kuro.fs` — a filesystem whose substrate is a CID DAG
 
-`kuro.fs` is portable `.cljc` (the same source runs on the JVM, under nbb,
+`kuro.fs` is portable `.cljk` (the same source runs on the JVM, under nbb,
 and in a browser via the shadow-cljs build). Paths map onto a content-
 addressed DAG: a directory is an IPLD map block, a file is a unixfs file
 DAG (`tech-ipfs-specs-unixfs` — not re-implemented here). The host injects
@@ -367,7 +367,7 @@ before treating a working Python tool as a working browser-local Hermes agent.
 ```sh
 kbb -M:test                     # portable model + ansi + stream (JVM)
 npm install
-npm run test:parity                 # the SAME .cljc suites under ClojureScript
+npm run test:parity                 # the SAME .cljk suites under kbb's SCI backend
 npm run test:host                   # both Node host providers (nbb)
 ```
 
