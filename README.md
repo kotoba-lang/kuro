@@ -367,7 +367,7 @@ before treating a working Python tool as a working browser-local Hermes agent.
 ```sh
 kbb -M:test                     # portable model + ansi + stream (JVM)
 npm install
-npm run test:parity                 # the SAME .cljk suites under kbb's SCI backend
+npm run test:parity                 # the SAME .cljk suites under ClojureScript (nbb; kbb's SCI backend)
 npm run test:host                   # both Node host providers (nbb)
 ```
 
